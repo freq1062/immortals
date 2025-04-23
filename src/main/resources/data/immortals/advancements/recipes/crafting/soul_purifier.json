@@ -1,0 +1,15 @@
+{
+    "criteria": {
+      "has_totem": {
+        "trigger": "minecraft:inventory_changed",
+        "conditions": {
+          "items": [{ "item": "minecraft:totem_of_undying" }]
+        }
+      }
+    },
+    "rewards": {
+      "recipes": ["immortals:soul_purifier"]
+    },
+    "requirements": [["has_totem"]]
+  }
+  
