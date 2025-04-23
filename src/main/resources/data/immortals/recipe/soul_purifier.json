@@ -1,0 +1,17 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+      "AAA",
+      "BAB",
+      "CCC"
+    ],
+    "key": {
+      "A": "minecraft:netherite_scrap",
+      "B": "minecraft:totem_of_undying",
+      "C": "minecraft:ghast_tear"
+    },
+    "result": {
+      "id": "immortals:soul_purifier",
+      "count": 1
+    }
+  }
