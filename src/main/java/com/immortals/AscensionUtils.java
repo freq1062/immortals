@@ -1,15 +1,23 @@
 package com.immortals;
 
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.scoreboard.ReadableScoreboardScore;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardObjective;
+import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 
 public class AscensionUtils {
-
     public static int getAscended(ServerPlayerEntity player) {
         Scoreboard sb = player.getWorld().getScoreboard();
         ScoreboardObjective obj = sb.getNullableObjective("hasAscended");
@@ -78,6 +86,44 @@ public class AscensionUtils {
             player.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.STRENGTH, Integer.MAX_VALUE, 1, false, false));
         }
+    }
+
+    public static void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher) {
+        dispatcher.register(CommandManager.literal("bind")
+                .then(CommandManager.argument("slot", IntegerArgumentType.integer(1, 9))
+                        .then(CommandManager.argument("spell", StringArgumentType.word())
+                                .executes(ctx -> {
+                                    ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                    int slot = IntegerArgumentType.getInteger(ctx, "slot") - 1;
+                                    String spellId = StringArgumentType.getString(ctx, "spell");
+                                    Spell spell = Spell.fromId(spellId);
+
+                                    if (spell == null) {
+                                        player.sendMessage(Text.literal("Unknown spell: " + spellId), false);
+                                        return 0;
+                                    }
+
+                                    Spell.bind(player, slot, spell);
+                                    player.sendMessage(
+                                            Text.literal("Bound " + spell.getId() + " to slot " + (slot + 1)), false);
+                                    return 1;
+                                }))));
+        dispatcher.register(CommandManager.literal("corruption")
+                .executes(ctx -> {
+                    ServerPlayerEntity player = ctx.getSource().getPlayer();
+                    int corruptionLevel = getCorruption(player);
+                    player.sendMessage(Text.literal("Your corruption level is: " + corruptionLevel), false);
+                    return 1;
+                }));
+    }
+
+    public static ActionResult tryCastSpell(ServerPlayerEntity player, ServerWorld world) {
+        if (!player.isSneaking())
+            return ActionResult.PASS;
+        int slot = player.getInventory().selectedSlot;
+        return Spell.tryActivate(player, slot)
+                ? ActionResult.SUCCESS
+                : ActionResult.PASS;
     }
 
 }
