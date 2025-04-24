@@ -18,9 +18,7 @@
 		"main": [
 			"com.immortals.Immortals"
 		],
-		"client": [
-			"com.immortals.ImmortalsClient"
-		]
+		"client": []
 	},
 	"depends": {
 		"fabricloader": ">=0.16.10",

@@ -1,10 +1,8 @@
 {
 	"required": true,
-	"package": "com.example.mixin",
+	"package": "com.immortals.mixin",
 	"compatibilityLevel": "JAVA_21",
-	"mixins": [
-		"ExampleMixin"
-	],
+	"mixins": [],
 	"injectors": {
 		"defaultRequire": 1
 	}
