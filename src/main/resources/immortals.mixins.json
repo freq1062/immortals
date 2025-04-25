@@ -1,9 +1,14 @@
 {
 	"required": true,
-	"compatibilityLevel": "JAVA_21",
+	"minVersion": "0.8",
 	"package": "com.immortals.mixin",
+	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-	  "DamageCapMixin"
-	]
+	  "DamageCapMixin",
+	  "FallDamageImmunityMixin"
+	],
+	"injectors": {
+	  "defaultRequire": 1
+	}
   }
   

@@ -1,13 +1,20 @@
 package com.immortals;
 
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.mob.HostileEntity;
+import net.minecraft.particle.ParticleTypes;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.text.Text;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+
+import net.minecraft.item.Items;
+import net.minecraft.item.ItemStack;
 
 /**
  * Defines all available spells, their cooldowns, activation logic,
@@ -19,22 +26,86 @@ public enum Spell {
         @Override
         public void activate(ServerPlayerEntity player) {
             Vec3d dir = player.getRotationVec(1.0F);
+            Vec3d startPos = player.getPos();
             player.addVelocity(dir.x * 2.5, dir.y * 1.2, dir.z * 2.5);
             player.velocityModified = true;
+
+            ServerWorld world = (ServerWorld) player.getWorld();
+            int rings = 3;
+            int particlesPerRing = 20;
+
+            for (int i = 0; i < rings; i++) {
+                double ringRadius = 0.5 + i * 0.4; // each ring gets larger
+                double backStep = 0.6 + i * 0.5; // spacing behind player
+
+                // Center of ring behind the player
+                Vec3d ringCenter = startPos.subtract(dir.multiply(backStep));
+
+                for (int j = 0; j < particlesPerRing; j++) {
+                    double angle = 2 * Math.PI * j / particlesPerRing;
+
+                    // Circle in local (X, Z) space
+                    double localX = Math.cos(angle) * ringRadius;
+                    double localY = Math.sin(angle) * ringRadius;
+                    Vec3d localOffset = new Vec3d(localX, localY, 0);
+
+                    // Rotate local offset to align with player's look direction
+                    Vec3d rotated = rotateVectorToMatchDirection(localOffset, dir);
+                    Vec3d finalPos = ringCenter.add(rotated);
+
+                    world.spawnParticles(ParticleTypes.CLOUD, finalPos.x, finalPos.y, finalPos.z, 1, 0, 0, 0, 0.01);
+                }
+            }
         }
     },
 
     GLOW("glow", 60_000) {
+
         @Override
         public void activate(ServerPlayerEntity player) {
             for (var other : player.getWorld().getPlayers()) {
-                if (other instanceof ServerPlayerEntity serverPlayer &&
-                        !serverPlayer.equals(player) &&
-                        serverPlayer.squaredDistanceTo(player) <= 900) {
+                if (other instanceof ServerPlayerEntity serverPlayer && !serverPlayer.equals(player)
+                        && serverPlayer.squaredDistanceTo(player) <= 900) {
                     serverPlayer.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 100, 0, false, false));
                 }
             }
             player.sendMessage(Text.literal("§eYou glow, revealing nearby players!"), true);
+        }
+    },
+
+    DRAGON_ASCENT("dragon_ascent", 10_000) {
+        @Override
+        public void activate(ServerPlayerEntity player) {
+            // must have dragon egg
+            if (!player.getInventory().contains(new ItemStack(Items.DRAGON_EGG))) {
+                player.sendMessage(Text.literal("§cYou need a Dragon Egg to cast this spell."), true);
+                return;
+            }
+
+            Vec3d pos = player.getPos().add(0, 0.1, 0); // slightly up so particles aren’t inside floor
+
+            ModEvents.spawnPersistentRune(player.getUuid(), pos);
+
+            player.setVelocity(player.getVelocity().x, 1.3, player.getVelocity().z);
+            player.velocityModified = true;
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.LEVITATION, 60, 0, false, false));
+
+            ServerWorld world = (ServerWorld) player.getWorld();
+            double radius = 10.0; // detection range
+            List<LivingEntity> targets = world.getEntitiesByClass(
+                    LivingEntity.class,
+                    player.getBoundingBox().expand(radius),
+                    e -> (e instanceof ServerPlayerEntity) || (e instanceof HostileEntity));
+
+            for (LivingEntity t : targets) {
+                Vec3d tpos = t.getPos().add(0, t.getStandingEyeHeight() / 2.0, 0);
+                // immediate
+                ModEvents.scheduleLightning(world, tpos, 1);
+                // delayed 20 ticks = 1 second
+                ModEvents.scheduleLightning(world, tpos, 2);
+            }
+
+            player.sendMessage(Text.literal("§dThe dragon rune lifts you skyward!"), true);
         }
     };
 
@@ -48,7 +119,14 @@ public enum Spell {
 
     /** Get capitalized display name for spell */
     public String getDisplayName() {
-        return Character.toUpperCase(id.charAt(0)) + id.substring(1);
+        String[] words = id.split("_");
+        StringBuilder displayName = new StringBuilder();
+        for (String word : words) {
+            displayName.append(Character.toUpperCase(word.charAt(0)))
+                    .append(word.substring(1))
+                    .append(" ");
+        }
+        return displayName.toString().trim();
     }
 
     /** The unique identifier players will use in `/bind ...` */
@@ -132,6 +210,11 @@ public enum Spell {
         if (spell == GLOW && corr < 3) {
             return false;
         }
+        // Egg Rune special requirement
+        if (spell == DRAGON_ASCENT && !player.getInventory().contains(new ItemStack(Items.DRAGON_EGG))) {
+            player.sendMessage(Text.literal("§cYou must carry a Dragon Egg to use this spell."), true);
+            return false;
+        }
 
         if (spell == null) {
             player.sendMessage(Text.literal("No spell bound to slot " + (slot + 1)), true);
@@ -170,6 +253,26 @@ public enum Spell {
     public static long getLastUse(ServerPlayerEntity player, Spell spell) {
         var map = LAST_USED.get(player.getUuid());
         return map == null ? 0L : map.getOrDefault(spell, 0L);
+    }
+
+    private static Vec3d rotateVectorToMatchDirection(Vec3d vec, Vec3d direction) {
+        // Get yaw and pitch from the direction vector
+        float yaw = (float) Math.atan2(-direction.x, direction.z);
+        float pitch = (float) Math.asin(-direction.y);
+
+        // Rotate around X axis (pitch)
+        double cosPitch = Math.cos(pitch);
+        double sinPitch = Math.sin(pitch);
+        double y1 = vec.y * cosPitch - vec.z * sinPitch;
+        double z1 = vec.y * sinPitch + vec.z * cosPitch;
+
+        // Rotate around Y axis (yaw)
+        double cosYaw = Math.cos(yaw);
+        double sinYaw = Math.sin(yaw);
+        double x2 = vec.x * cosYaw - z1 * sinYaw;
+        double z2 = vec.x * sinYaw + z1 * cosYaw;
+
+        return new Vec3d(x2, y1, z2);
     }
 
 }
