@@ -12,20 +12,25 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.particle.DustParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.text.Text;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.entity.SpawnReason;
+import net.minecraft.entity.attribute.EntityAttributeInstance;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.world.World;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +41,9 @@ import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.scoreboard.ScoreboardObjective;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
+import net.minecraft.entity.attribute.EntityAttributeInstance;
+import net.minecraft.entity.attribute.EntityAttributes;
+import com.immortals.item.ModItems; // for ModItems.HEART
 
 public class ModEvents {
 
@@ -65,6 +73,19 @@ public class ModEvents {
     /** Called from the spell to schedule a 3-second rune at `pos` */
     public static void spawnPersistentRune(UUID playerId, Vec3d pos) {
         ACTIVE_RUNES.put(playerId, new RuneInstance(pos, 8));
+    }
+
+    // === General Pending Particles ===
+    private record ParticleTask(DustParticleEffect effect, Vec3d pos, int ticksLeft, ServerWorld world) {
+    }
+
+    private static final List<ParticleTask> pendingParticles = new ArrayList<>();
+
+    /**
+     * Schedule a DustParticleEffect at pos for duration ticks (one spawn per tick)
+     */
+    public static void scheduleParticle(DustParticleEffect effect, Vec3d pos, int durationTicks, ServerWorld world) {
+        pendingParticles.add(new ParticleTask(effect, pos, durationTicks, world));
     }
 
     /** Schedule a bolt at `pos` in `delay` ticks */
@@ -163,6 +184,13 @@ public class ModEvents {
                 newPlayer.sendMessage(
                         Text.literal("§5You feel weakened. Corruption: §l" + lvl + "§r. Next: " + next),
                         true);
+            } else {
+                EntityAttributeInstance old_hp = oldPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                EntityAttributeInstance new_hp = newPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                new_hp.setBaseValue(old_hp.getBaseValue() - 2.0);
+                newPlayer.sendMessage(
+                        Text.literal("§5You lost a heart."),
+                        true);
             }
         });
 
@@ -170,14 +198,65 @@ public class ModEvents {
         // ascended or the victim was ascended
         ServerLivingEntityEvents.AFTER_DEATH.register((ent, src) -> {
             if (!ent.getWorld().isClient() && ent instanceof ServerPlayerEntity victim) {
-                Entity k = src.getAttacker();
+                Entity attacker = src.getAttacker();
+                boolean victimImmortal = AscensionUtils.getAscended(victim) == 1;
+                boolean attackerImmortal = attacker instanceof ServerPlayerEntity k
+                        && AscensionUtils.getAscended(k) == 1;
 
-                boolean victimAscended = AscensionUtils.getAscended(victim) == 1;
-                boolean killerAscended = k instanceof ServerPlayerEntity killer
-                        && AscensionUtils.getAscended(killer) != 0;
+                // ——— Mortals’ lifesteal ———
+                if (!victimImmortal && ((attacker instanceof ServerPlayerEntity killer
+                        && AscensionUtils.getAscended(killer) != 1)
+                        || (attacker == null || !(attacker instanceof ServerPlayerEntity)))) {
+                    // mortal killed by mortal or natural causes
+                    EntityAttributeInstance mhVic = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                    if (mhVic.getBaseValue() <= 2.0) {
+                        // banned ):
+                        mhVic.setBaseValue(8.0); // Restart player at 3 hearts, - 1 on respawn
+                        String playerName = victim.getNameForScoreboard();
+                        String reason = "You have run out of hearts!";
+                        String command = String.format("tempban %s 24h %s", playerName, reason);
+                        MinecraftServer server = victim.getServer();
+                        server.getCommandManager().executeWithPrefix(server.getCommandSource(), command);
+                    }
 
-                if (victimAscended || killerAscended) {
-                    victim.dropItem(new ItemStack(ModItems.SOUL_SHARD, 1), false);
+                    // 2) drop a heart item at victim’s death spot
+                    victim.getWorld().spawnEntity(new ItemEntity(
+                            victim.getWorld(),
+                            victim.getX(), victim.getY(), victim.getZ(),
+                            new ItemStack(ModItems.HEART)));
+                }
+
+                // ——— Mortals kill Immortals: scaled hearts ———
+                if (victimImmortal && attacker instanceof ServerPlayerEntity killer
+                        && AscensionUtils.getAscended(killer) != 1) {
+                    int corr = AscensionUtils.getCorruption(victim); // victim’s corruption
+                    int heartsToGive = switch (corr) {
+                        case 2 -> 2;
+                        case 3 -> 3;
+                        default -> 1;
+                    };
+
+                    // drop that many heart items
+                    for (int i = 0; i < heartsToGive; i++) {
+                        victim.getWorld().spawnEntity(new ItemEntity(
+                                victim.getWorld(),
+                                victim.getX(), victim.getY(), victim.getZ(),
+                                new ItemStack(ModItems.HEART)));
+                    }
+                }
+
+                // Immortal kills
+                if (victimImmortal || attackerImmortal) {
+                    // base drops one shard…
+                    int dropCount = 1;
+                    double maxHearts = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue() / 2.0;
+                    if (maxHearts >= 14 && maxHearts <= 16)
+                        dropCount = 2;
+                    else if (maxHearts >= 17)
+                        dropCount = 3;
+
+                    victim.dropItem(new ItemStack(ModItems.SOUL_SHARD, dropCount), false);
+
                     if (AscensionUtils.getCorruption(victim) <= -3) {
                         // banned ):
                         String playerName = victim.getNameForScoreboard();
@@ -188,15 +267,15 @@ public class ModEvents {
                     }
                 }
 
-                if (k instanceof ServerPlayerEntity killer
+                if (attacker instanceof ServerPlayerEntity killer
                         && AscensionUtils.getCorruption(killer) >= 3) {
                     // heal 6.0f = 3 hearts
                     killer.heal(6.0f);
                     killer.sendMessage(Text.literal("§aYou are empowered on kill... (+3 hearts)"), true);
                 }
             }
-        });
 
+        });
         // Item use events
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (world.isClient()) {
@@ -210,11 +289,26 @@ public class ModEvents {
                 ScoreboardObjective obj = sb.getNullableObjective("hasAscended");
 
                 if (AscensionUtils.getAscended((ServerPlayerEntity) player) != 1) {
-                    player.sendMessage(Text.literal("You feel a surge of divine power!"), true);
+                    // Give starting corruption levels based on hearts
+                    double curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue();
+                    int start_level = 0;
+                    if (curr_hp <= 10) {
+                        start_level = 0;
+                    } else if (curr_hp <= 14) {
+                        start_level = 1;
+                    } else if (curr_hp <= 18) {
+                        start_level = 2;
+                    } else {
+                        start_level = 3;
+                    }
+
+                    AscensionUtils.addCorruption((ServerPlayerEntity) player, start_level);
+                    player.sendMessage(
+                            Text.literal("You feel a surge of divine power! Began at " + start_level + " corruption."),
+                            true);
                     sb.getOrCreateScore(player, obj).setScore(1);
 
                     // Play totem animation and particles
-                    player.setHealth(1.0F);
                     world.sendEntityStatus(player, (byte) 35); // Totem pop
                     if (world instanceof ServerWorld serverWorld) {
                         serverWorld.spawnParticles(ParticleTypes.SMOKE, player.getX(), player.getY() + 1, player.getZ(),
@@ -279,6 +373,23 @@ public class ModEvents {
                     return ActionResult.SUCCESS;
                 }
                 player.sendMessage(Text.literal("Soul purifier cannot increase corruption beyond +0."), true);
+                return ActionResult.FAIL;
+            }
+
+            if (stack.getItem() == ModItems.HEART) {
+                if (AscensionUtils.getAscended((ServerPlayerEntity) player) != 1) {
+                    EntityAttributeInstance curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                    if (curr_hp.getBaseValue() <= 40.0) {
+                        curr_hp.setBaseValue(curr_hp.getBaseValue() + 2.0);
+                        stack.decrement(1);
+                        return ActionResult.SUCCESS;
+                    } else {
+                        player.sendMessage(Text.literal("§5You have reached the maximum number of hearts."),
+                                true);
+                        return ActionResult.FAIL;
+                    }
+                }
+                player.sendMessage(Text.literal("An immortal does not need extra hearts to be strong."), true);
                 return ActionResult.FAIL;
             }
 
@@ -407,6 +518,35 @@ public class ModEvents {
                             new LightningTask(task.world, task.pos, task.delay - 1));
                 }
             }
+
+            List<ParticleTask> toProcess = new ArrayList<>(pendingParticles);
+            pendingParticles.clear();
+
+            for (ParticleTask pt : toProcess) {
+                // spawn the particle
+                pt.world().spawnParticles(
+                        pt.effect(),
+                        pt.pos().x, pt.pos().y, pt.pos().z,
+                        1, 0, 0, 0, 0);
+
+                // 4) If it still has ticks, decrement and re-add to the main list
+                if (pt.ticksLeft() > 1) {
+                    pendingParticles.add(
+                            new ParticleTask(
+                                    pt.effect(),
+                                    pt.pos(),
+                                    pt.ticksLeft() - 1,
+                                    pt.world()));
+                }
+            }
+
+            // Active Runes
+            ACTIVE_RUNES.forEach((id, rune) -> {
+                drawRune(rune.center, server.getWorld(World.OVERWORLD));
+                rune.ticksLeft--;
+                if (rune.ticksLeft <= 0)
+                    ACTIVE_RUNES.remove(id);
+            });
         });
 
     }

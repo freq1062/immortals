@@ -4,6 +4,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.HostileEntity;
+import net.minecraft.particle.DustParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -12,9 +13,13 @@ import net.minecraft.text.Text;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import net.minecraft.item.Items;
 import net.minecraft.item.ItemStack;
+
+import net.minecraft.particle.DustParticleEffect;
+import org.joml.Vector3f;
 
 /**
  * Defines all available spells, their cooldowns, activation logic,
@@ -59,19 +64,55 @@ public enum Spell {
         }
     },
 
-    GLOW("glow", 60_000) {
-
+    GLOW("glow", 7_000) {
         @Override
         public void activate(ServerPlayerEntity player) {
-            for (var other : player.getWorld().getPlayers()) {
-                if (other instanceof ServerPlayerEntity serverPlayer && !serverPlayer.equals(player)
-                        && serverPlayer.squaredDistanceTo(player) <= 900) {
-                    serverPlayer.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 100, 0, false, false));
+            ServerWorld world = (ServerWorld) player.getWorld();
+
+            // 1) Apply glowing effect to nearby players
+            for (ServerPlayerEntity other : world.getPlayers()) {
+                if (!other.equals(player) && other.squaredDistanceTo(player) <= 30 * 30) {
+                    other.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 100, 0, false, false));
                 }
             }
+
+            // 2) Spawn expanding sphere of gold dust
+            // center at mid‐body height
+            Vec3d center = player.getPos().add(0, player.getStandingEyeHeight() * 0.5, 0);
+
+            // yellow dust: RGB (1.0f, 0.84f, 0f), size 1
+            DustParticleEffect goldDust = new DustParticleEffect(0xFFD700, 3f);
+
+            int maxRadius = 30;
+            int circlePoints = 40; // points per circle
+            int layers = 18; // horizontal slices
+
+            // Compute sphere points once
+            List<Vec3d> spherePoints = new ArrayList<>();
+            for (int i = 0; i <= layers; i++) {
+                // dy from -max to +max
+                double dy = (2.0 * maxRadius * i / layers) - maxRadius;
+                double r = Math.sqrt(maxRadius * maxRadius - dy * dy);
+
+                for (int j = 0; j < circlePoints; j++) {
+                    double theta = 2 * Math.PI * j / circlePoints;
+                    double x = center.x + Math.cos(theta) * r;
+                    double y = center.y + dy;
+                    double z = center.z + Math.sin(theta) * r;
+                    spherePoints.add(new Vec3d(x, y, z));
+                }
+            }
+
+            // Schedule each particle for 100 ticks (~5 seconds)
+            for (Vec3d pt : spherePoints) {
+                ModEvents.scheduleParticle(goldDust, pt, 5, world);
+            }
+
             player.sendMessage(Text.literal("§eYou glow, revealing nearby players!"), true);
         }
     },
+
+    // new DustParticleEffect(0xFFD700, 3f);
 
     DRAGON_ASCENT("dragon_ascent", 10_000) {
         @Override
@@ -83,7 +124,6 @@ public enum Spell {
             }
 
             Vec3d pos = player.getPos().add(0, 0.1, 0); // slightly up so particles aren’t inside floor
-
             ModEvents.spawnPersistentRune(player.getUuid(), pos);
 
             player.setVelocity(player.getVelocity().x, 1.3, player.getVelocity().z);
@@ -92,16 +132,26 @@ public enum Spell {
 
             ServerWorld world = (ServerWorld) player.getWorld();
             double radius = 10.0; // detection range
+
+            // Find all living entities (players & hostiles) in range…
             List<LivingEntity> targets = world.getEntitiesByClass(
                     LivingEntity.class,
                     player.getBoundingBox().expand(radius),
                     e -> (e instanceof ServerPlayerEntity) || (e instanceof HostileEntity));
 
             for (LivingEntity t : targets) {
-                Vec3d tpos = t.getPos().add(0, t.getStandingEyeHeight() / 2.0, 0);
-                // immediate
+                // skip yourself
+                if (t == player)
+                    continue;
+
+                // SKIP any teammate (vanilla scoreboard teams)…
+                if (t.isTeammate(player))
+                    continue;
+
+                Vec3d tpos = t.getPos().add(0, t.getStandingEyeHeight() * 0.5, 0);
+                // immediate lightning
                 ModEvents.scheduleLightning(world, tpos, 1);
-                // delayed 20 ticks = 1 second
+                // delayed 2 ticks (1/10th sec)
                 ModEvents.scheduleLightning(world, tpos, 2);
             }
 

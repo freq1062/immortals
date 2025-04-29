@@ -18,6 +18,7 @@ public class ModItems {
     public static final Item ASCENSION_RELIC = registerItem("ascension_relic", Item::new, new Item.Settings());
     public static final Item SOUL_PURIFIER = registerItem("soul_purifier", Item::new, new Item.Settings());
     public static final Item SOUL_SHARD = registerItem("soul_shard", Item::new, new Item.Settings());
+    public static final Item HEART = registerItem("heart", Item::new, new Item.Settings());
 
     public static Item registerItem(String name, Function<Item.Settings, Item> factory, Item.Settings settings) {
         final RegistryKey<Item> registerKey = RegistryKey.of(RegistryKeys.ITEM, Identifier.of(Immortals.MOD_ID, name));
@@ -29,6 +30,7 @@ public class ModItems {
         entries.add(ASCENSION_RELIC);
         entries.add(SOUL_PURIFIER);
         entries.add(SOUL_SHARD);
+        entries.add(HEART);
     }
 
     public static void registerModItems() {

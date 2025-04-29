@@ -16,6 +16,8 @@ import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.item.ItemStack;
+import com.immortals.item.ModItems; // Ensure this matches the actual package where ModItems is defined
 
 public class AscensionUtils {
     public static int getAscended(ServerPlayerEntity player) {
@@ -115,6 +117,56 @@ public class AscensionUtils {
                     player.sendMessage(Text.literal("Your corruption level is: " + corruptionLevel), false);
                     return 1;
                 }));
+        dispatcher.register(CommandManager.literal("corruption")
+                .executes(ctx -> {
+                    ServerPlayerEntity player = ctx.getSource().getPlayer();
+                    if (getAscended(player) != 1) {
+                        player.sendMessage(Text.literal("You do not have corruption as a mortal."),
+                                false);
+                        return 0;
+                    }
+                    int corruptionLevel = getCorruption(player);
+                    player.sendMessage(Text.literal("Your corruption level is: " + corruptionLevel), false);
+                    return 1;
+                }));
+
+        dispatcher.register(CommandManager.literal("withdraw")
+                .then(CommandManager.argument("hearts", IntegerArgumentType.integer(1))
+                        .executes(ctx -> {
+                            ServerPlayerEntity player = ctx.getSource().getPlayer();
+
+                            if (getAscended(player) == 1) {
+                                player.sendMessage(Text.literal("You cannot withdraw hearts as an immortal!"),
+                                        false);
+                                return 0;
+                            }
+
+                            int heartsToWithdraw = IntegerArgumentType.getInteger(ctx, "hearts");
+                            double currentHealth = player.getHealth();
+                            double maxHealth = player.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue();
+
+                            if (heartsToWithdraw < 1 || currentHealth - heartsToWithdraw <= 0
+                                    || maxHealth - heartsToWithdraw < 1) {
+                                player.sendMessage(Text.literal("Invalid amount of hearts to withdraw."), false);
+                                return 0;
+                            }
+
+                            // Reduce player's max health
+                            player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                                    .setBaseValue(maxHealth - heartsToWithdraw);
+                            player.setHealth((float) Math.min(currentHealth, maxHealth - (heartsToWithdraw * 2)));
+
+                            // Give the player the withdrawn hearts as an item (e.g., Heart Shard)
+                            // Assuming there's an item called "Heart Shard" in your mod
+                            ItemStack heartShard = new ItemStack(ModItems.HEART, heartsToWithdraw);
+                            if (!player.getInventory().insertStack(heartShard)) {
+                                player.dropItem(heartShard, false);
+                            }
+
+                            player.sendMessage(Text.literal("You have withdrawn " + heartsToWithdraw + " hearts."),
+                                    false);
+                            return 1;
+                        })));
     }
 
     public static ActionResult tryCastSpell(ServerPlayerEntity player, ServerWorld world) {
