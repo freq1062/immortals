@@ -1,6 +1,7 @@
 package com.immortals;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+// Removed incorrect import for EntityExperienceOrbEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -10,6 +11,7 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.particle.DustParticleEffect;
@@ -18,6 +20,7 @@ import net.minecraft.text.Text;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.Vec3d;
@@ -30,8 +33,8 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.Map;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Iterator;
@@ -41,9 +44,6 @@ import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.scoreboard.ScoreboardObjective;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributes;
-import com.immortals.item.ModItems; // for ModItems.HEART
 
 public class ModEvents {
 
@@ -80,6 +80,8 @@ public class ModEvents {
     }
 
     private static final List<ParticleTask> pendingParticles = new ArrayList<>();
+
+    private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
 
     /**
      * Schedule a DustParticleEffect at pos for duration ticks (one spawn per tick)
@@ -276,6 +278,7 @@ public class ModEvents {
             }
 
         });
+
         // Item use events
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (world.isClient()) {
@@ -292,11 +295,13 @@ public class ModEvents {
                     // Give starting corruption levels based on hearts
                     double curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue();
                     int start_level = 0;
-                    if (curr_hp <= 10) {
+                    EntityAttributeInstance maxHearts = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                    maxHearts.setBaseValue(20.0);
+                    if (curr_hp <= 10 * 2) {
                         start_level = 0;
-                    } else if (curr_hp <= 14) {
+                    } else if (curr_hp <= 14 * 2) {
                         start_level = 1;
-                    } else if (curr_hp <= 18) {
+                    } else if (curr_hp <= 18 * 2) {
                         start_level = 2;
                     } else {
                         start_level = 3;
@@ -379,7 +384,7 @@ public class ModEvents {
             if (stack.getItem() == ModItems.HEART) {
                 if (AscensionUtils.getAscended((ServerPlayerEntity) player) != 1) {
                     EntityAttributeInstance curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
-                    if (curr_hp.getBaseValue() <= 40.0) {
+                    if (curr_hp.getBaseValue() < 40.0) {
                         curr_hp.setBaseValue(curr_hp.getBaseValue() + 2.0);
                         stack.decrement(1);
                         return ActionResult.SUCCESS;
@@ -402,6 +407,56 @@ public class ModEvents {
 
         // Server tick events
         ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+            for (ServerWorld world : server.getWorlds()) {
+                for (ExperienceOrbEntity orb : world.getEntitiesByType(
+                        EntityType.EXPERIENCE_ORB, o -> !o.isRemoved())) {
+
+                    int id = orb.getId();
+
+                    // 1) Skip if we've already bumped this orb
+                    if (scaledOrbIds.contains(id))
+                        continue;
+
+                    // 2) Only bump when an ascended player is in pickup range
+                    PlayerEntity picker = world.getClosestPlayer(orb, 2.5);
+                    if (!(picker instanceof ServerPlayerEntity sp)
+                            || AscensionUtils.getAscended(sp) != 1) {
+                        continue;
+                    }
+
+                    // 3) Compute the new XP value
+                    int orig = orb.getExperienceAmount();
+                    int bumped = orig;
+                    if (AscensionUtils.getCorruption((ServerPlayerEntity) picker) >= 1) {
+                        bumped = (int) Math.ceil(orig * 1.10);
+                    } else if (AscensionUtils.getCorruption((ServerPlayerEntity) picker) <= -1) {
+                        bumped = (int) Math.ceil(orig * 0.9);
+                    }
+                    // inside your tick handler, right after you compute `bumped`:
+                    System.out.printf(
+                            "Scaling orb %d at %s: original=%d, bumped=%d%n",
+                            orb.getId(),
+                            orb.getBlockPos(),
+                            orig,
+                            bumped);
+
+                    // 4) Spawn a new orb and discard the old one
+                    ExperienceOrbEntity newOrb = new ExperienceOrbEntity(
+                            world, orb.getX(), orb.getY(), orb.getZ(), bumped);
+                    world.spawnEntity(newOrb);
+                    orb.discard();
+
+                    // 5) Remember that we’ve scaled this orb’s original ID
+                    scaledOrbIds.add(id);
+                    scaledOrbIds.add(newOrb.getId());
+
+                    // (Optional) prune old IDs every now and then to avoid unbounded growth
+                    if (scaledOrbIds.size() > 10_000) {
+                        scaledOrbIds.clear();
+                    }
+                }
+            }
+
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
                 UUID id = player.getUuid();
                 int current = player.getInventory().selectedSlot;
