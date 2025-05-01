@@ -5,6 +5,9 @@ import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -145,5 +148,13 @@ public class Utils {
         if (lightningBolt != null) {
             world.spawnEntity(lightningBolt);
         }
+    }
+
+    public static ItemStack findInInventory(PlayerEntity p, Item item) {
+        for (ItemStack s : p.getInventory().main) {
+            if (s.isOf(item))
+                return s;
+        }
+        return null;
     }
 }

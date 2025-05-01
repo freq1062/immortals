@@ -25,6 +25,7 @@ public class Main implements ModInitializer {
         Immortals.register();
         Mortals.register();
         Spell.register();
+        Weapons.register();
         LOGGER.info("Immortals Mod Loaded");
     }
 }
