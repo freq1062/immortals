@@ -75,7 +75,7 @@ public enum SpellRegistry {
                 }
             }
 
-            // 2) Spawn expanding sphere of gold dust
+            // 2) Spawn lattice of gold dust at the edges
             // center at mid‐body height
             Vec3d center = player.getPos().add(0, player.getStandingEyeHeight() * 0.5, 0);
 
@@ -83,35 +83,27 @@ public enum SpellRegistry {
             DustParticleEffect goldDust = new DustParticleEffect(0xFFD700, 3f);
 
             int maxRadius = 30;
-            int circlePoints = 40; // points per circle
-            int layers = 18; // horizontal slices
+            double spacing = 2.0; // distance between lattice points
 
-            // Compute sphere points once
-            List<Vec3d> spherePoints = new ArrayList<>();
-            for (int i = 0; i <= layers; i++) {
-                // dy from -max to +max
-                double dy = (2.0 * maxRadius * i / layers) - maxRadius;
-                double r = Math.sqrt(maxRadius * maxRadius - dy * dy);
-
-                for (int j = 0; j < circlePoints; j++) {
-                    double theta = 2 * Math.PI * j / circlePoints;
-                    double x = Math.cos(theta) * r;
-                    double y = dy;
-                    double z = Math.sin(theta) * r;
-                    spherePoints.add(new Vec3d(x, y, z));
+            // Compute lattice points only at the edges
+            List<Vec3d> latticePoints = new ArrayList<>();
+            for (double x = -maxRadius; x <= maxRadius; x += spacing) {
+                for (double y = -maxRadius; y <= maxRadius; y += spacing) {
+                    for (double z = -maxRadius; z <= maxRadius; z += spacing) {
+                        double distanceSquared = x * x + y * y + z * z;
+                        if (distanceSquared <= maxRadius * maxRadius
+                                && distanceSquared >= (maxRadius - spacing) * (maxRadius - spacing)) {
+                            latticePoints.add(new Vec3d(x, y, z));
+                        }
+                    }
                 }
             }
 
             // Schedule particles using the task queue
-            for (Vec3d offset : spherePoints) {
+            for (Vec3d offset : latticePoints) {
                 Vec3d particlePos = center.add(offset);
                 Spell.addTask(player.getUuid(), () -> {
-                    for (int i = 0; i < 100; i++) { // 100 iterations for 5 seconds (100 * 50ms = 5000ms)
-                        Spell.addTask(player.getUuid(), () -> {
-                            world.spawnParticles(goldDust, particlePos.x, particlePos.y, particlePos.z, 1, 0, 0, 0,
-                                    0.01);
-                        }, i * 50); // schedule every 50ms
-                    }
+                    world.spawnParticles(goldDust, particlePos.x, particlePos.y, particlePos.z, 1, 0, 0, 0, 0.01);
                 }, 0);
             }
 
@@ -163,12 +155,12 @@ public enum SpellRegistry {
                 DamageSource source = world.getDamageSources().create(DamageTypes.MAGIC); // magic damage source
                 // immediate lightning
                 Spell.addTask(player.getUuid(), () -> {
-                    t.damage(world, source, 10.0f);
+                    t.damage(world, source, 15.0f);
                     Utils.strikeLightning(world, tpos);
                 }, 1000); // 1 second delay
 
                 Spell.addTask(player.getUuid(), () -> {
-                    t.damage(world, source, 10.0f);
+                    t.damage(world, source, 15.0f);
                     Utils.strikeLightning(world, tpos);
                 }, 2000); // 2 seconds delay
             }

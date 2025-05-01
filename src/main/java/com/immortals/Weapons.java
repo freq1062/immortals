@@ -10,17 +10,12 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.PositionFlag;
-import net.minecraft.item.Item;
 import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Vec3d;
@@ -32,24 +27,24 @@ import net.minecraft.particle.ParticleTypes;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.joml.Vector3f;
-
 public class Weapons {
     // Track each mortal’s Fractal Edge count
     private static final Map<UUID, Integer> fractalCount = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> PHASE_CHANGE_COOLDOWNS = new ConcurrentHashMap<>();
+    private static UUID lastPhasebreakerOwner = null;
     private static final long PHASE_CHANGE_COOLDOWN_MS = 3_000;
 
     public static void register() {
         // 1) Unlock: right-click a Dragon Egg to get Phasebreaker
         UseItemCallback.EVENT.register((player, world, hand) -> {
-            if (world.isClient)
+            if (world.isClient || Utils.getAscended((ServerPlayerEntity) player))
                 return ActionResult.PASS;
             ItemStack inHand = player.getStackInHand(hand);
             if (inHand.getItem() == Items.DRAGON_EGG && Utils.findInInventory(player, ModItems.PHASEBREAKER) == null) {
                 inHand.decrement(1);
                 player.getInventory().offerOrDrop(new ItemStack(ModItems.PHASEBREAKER));
                 player.sendMessage(Text.literal("§aYou have unlocked the DRK-07 Phasebreaker!"), true);
+                lastPhasebreakerOwner = player.getUuid();
                 return ActionResult.SUCCESS;
             } else if (inHand.getItem() == ModItems.PHASEBREAKER && player.isSneaking()) {
                 UUID id = player.getUuid();
@@ -159,7 +154,7 @@ public class Weapons {
 
             // ── ONLY count if it was a *fully-charged* swing (i.e. no “weak” spam hits) ──
             // 0.5F here is the interpolation tick; you can also pass 0 if you like.
-            if (sp.getAttackCooldownProgress(0.5F) < 1.0F) {
+            if (sp.getAttackCooldownProgress(0.5F) < 0.84F) {
                 return ActionResult.PASS;
             }
 
@@ -231,6 +226,34 @@ public class Weapons {
                     player.sendMessage(Text.literal("§aPhase Change ready!"), true);
                     // once we show “ready”, we can remove the entry so it won’t repeat:
                     PHASE_CHANGE_COOLDOWNS.remove(id);
+                }
+            }
+        });
+
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            for (ServerWorld world : server.getWorlds()) {
+                for (ServerPlayerEntity player : world.getPlayers()) {
+                    UUID pid = player.getUuid();
+
+                    // 1) Check if they have any Phasebreaker in *their* inventory:
+                    var inv = player.getInventory().main;
+                    for (int i = 0; i < inv.size(); i++) {
+                        ItemStack stack = inv.get(i);
+                        if ((stack.getItem() == ModItems.PHASEBREAKER || stack.getItem() == Items.DRAGON_EGG)
+                                && !Objects.equals(pid, lastPhasebreakerOwner)) {
+                            // Replace the Phasebreaker with a Dragon Egg
+                            if (stack.getItem() == ModItems.PHASEBREAKER) {
+                                inv.set(i, new ItemStack(Items.DRAGON_EGG));
+                                player.sendMessage(
+                                        Text.literal(
+                                                "§cPhasebreaker transformed back into a Dragon Egg!"),
+                                        true);
+                            }
+                            lastPhasebreakerOwner = pid;
+                            System.out.println(lastPhasebreakerOwner);
+                            break;
+                        }
+                    }
                 }
             }
         });

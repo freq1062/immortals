@@ -24,7 +24,7 @@ public class ModItems {
     public static final Item PHASEBREAKER = registerItem("phasebreaker",
             settings -> new SwordItem(
                     ToolMaterial.NETHERITE,
-                    8, // attack damage bonus (on top of material’s base for Netherite)
+                    3, // same attack as netherite sword
                     -2.4F,
                     settings),
             new Item.Settings());
