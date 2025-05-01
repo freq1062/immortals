@@ -8,7 +8,7 @@ import net.minecraft.item.Items;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.Identifier;
-import com.immortals.Immortals;
+import com.immortals.Main;
 
 import java.util.function.Function;
 
@@ -21,7 +21,7 @@ public class ModItems {
     public static final Item HEART = registerItem("heart", Item::new, new Item.Settings());
 
     public static Item registerItem(String name, Function<Item.Settings, Item> factory, Item.Settings settings) {
-        final RegistryKey<Item> registerKey = RegistryKey.of(RegistryKeys.ITEM, Identifier.of(Immortals.MOD_ID, name));
+        final RegistryKey<Item> registerKey = RegistryKey.of(RegistryKeys.ITEM, Identifier.of(Main.MOD_ID, name));
         return Items.register(registerKey, factory, settings);
     }
 

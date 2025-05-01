@@ -1,28 +1,347 @@
 package com.immortals;
 
-import net.fabricmc.api.ModInitializer;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.immortals.item.ModItems;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.ExperienceOrbEntity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.attribute.EntityAttributeInstance;
+import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.particle.ParticleTypes;
+import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.scoreboard.ScoreboardCriterion;
+import net.minecraft.scoreboard.ScoreboardObjective;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
 
-public class Immortals implements ModInitializer {
-	public static final String MOD_ID = "immortals";
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
-	// This logger is used to write text to the console and the log file.
-	// It is considered best practice to use your mod id as the logger's name.
-	// That way, it's clear which mod wrote info, warnings, and errors.
-	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+/*Implements the Immortals' corruption system.
 
-	@Override
-	public void onInitialize() {
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
+Relics of ascension found in ancient city, trial chamber, nether fortress chests
+Shapeless crafting with totem to get totem of ascension
+Right click totem of ascension to become an immortal. Your starting corruption level is based on the number of hearts you have, and the extra hearts are forfeit
 
-		LOGGER.info("Immortals Mod Loaded");
-		ModItems.registerModItems();
-		ModEvents.register();
+<=10 hearts: 0
+11-14 hearts: +1
+14-18 hearts: +2
+18-20 hearts: +3
+
+-3: Permanent weakness 1
+-2: Permanent slowness 1
+-1: -1 max heart, -10% xp gain
+0: A single source of damage cannot do more than 60% of your max health
++1: Permanent fire resistance, no fall damage, +10% xp gain
++2: Permanent strength 2, permanent speed 1, dash spell
++3: Resistance 1 when below 3 hearts, Glow spell, heal 3 hearts on kill
+
+When an immortal kills another player, the victim drops a soul shard which can be used to increase your corruption level and does NOT drop a max heart. The number of soul shards dropped also increases depending on the number of hearts the victim had.
+
+To +1 or below: 1 soul shard to level up
+To +2: 2 soul shards
+To +3: 3 soul shards
+
+<14 max hearts: 1 soul shard
+14-16 max hearts: 2 soul shards
+17-20 max hearts: 3 soul shards
+
+When an immortal dies, their corruption level drops by 1
+When an immortal dies from natural causes, they drop a soul shard
+Soul purifiers: Complex shaped crafting recipe that can increase your corruption level by 1 until base 0.
+/corruption: Shows your current corruption level
+If an immortal goes dies at -3 corruption, they are banned for 48 hours
+Immortal players cannot hold totems of undying.
+ */
+public class Immortals {
+
+	private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
+
+	public static void register() {
+
+		// Initialize the scoreboard objectives for ascension and corruption
+		ServerTickEvents.START_SERVER_TICK.register((MinecraftServer server) -> {
+			Scoreboard sb = server.getScoreboard();
+			// Ascended: 0 or null = not ascended, 1 = ascended
+			if (sb.getNullableObjective("hasAscended") == null) {
+				sb.addObjective(
+						"hasAscended",
+						ScoreboardCriterion.DUMMY,
+						(Text) Text.literal("Ascended"),
+						ScoreboardCriterion.RenderType.INTEGER,
+						false,
+						null);
+			}
+			// Corruption Level: -3 to +3 or null
+			if (sb.getNullableObjective("corruptionLevel") == null) {
+				sb.addObjective(
+						"corruptionLevel",
+						ScoreboardCriterion.DUMMY,
+						(Text) Text.literal("Corruption"),
+						ScoreboardCriterion.RenderType.INTEGER,
+						false,
+						null);
+			}
+		});
+
+		// Register corruption command
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+			dispatcher.register(CommandManager.literal("corruption")
+					.executes(ctx -> {
+						ServerPlayerEntity player = ctx.getSource().getPlayer();
+						if (!Utils.getAscended(player)) {
+							player.sendMessage(Text.literal("You do not have corruption as a mortal."),
+									false);
+							return 0;
+						}
+						int corruptionLevel = Utils.getCorruption(player);
+						player.sendMessage(Text.literal("Your corruption level is: " + corruptionLevel), false);
+						return 1;
+					}));
+		});
+
+		// Send decreased corruption message on respawn
+		ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
+			if (Utils.getAscended(newPlayer)) {
+				Utils.addCorruption(newPlayer, -1);
+				int lvl = Utils.getCorruption(newPlayer);
+				int next = Utils.nextShardCost(lvl);
+				Utils.applyCorruptionEffects(newPlayer);
+				newPlayer.sendMessage(
+						Text.literal("§5You feel weakened. Corruption: §l" + lvl + "§r. Next: " + next),
+						true);
+			}
+		});
+
+		// Implement immortal victims and killers
+		ServerLivingEntityEvents.AFTER_DEATH.register((ent, src) -> {
+			if (!ent.getWorld().isClient() && ent instanceof ServerPlayerEntity victim) {
+				Entity attacker = src.getAttacker();
+				boolean victimImmortal = Utils.getAscended(victim);
+				boolean attackerImmortal = attacker instanceof ServerPlayerEntity k
+						&& Utils.getAscended(k);
+
+				// Immortal kills or dies
+				if (victimImmortal || attackerImmortal) {
+					// Scale the soul shard drop count based on victim's max health
+					int dropCount = 1;
+					double maxHearts = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue() / 2.0;
+					if (maxHearts >= 14 && maxHearts <= 16)
+						dropCount = 2;
+					else if (maxHearts >= 17)
+						dropCount = 3;
+
+					victim.dropItem(new ItemStack(ModItems.SOUL_SHARD, dropCount), false);
+
+					if (Utils.getCorruption(victim) <= -3) {
+						// banned ):
+						String playerName = victim.getNameForScoreboard();
+						String reason = "You have lost all your corruption levels!";
+						String command = String.format("tempban %s 24h %s", playerName, reason);
+						MinecraftServer server = victim.getServer();
+						server.getCommandManager().executeWithPrefix(server.getCommandSource(), command);
+					}
+				}
+
+				// +3 on-kill ability
+				if (attacker instanceof ServerPlayerEntity killer
+						&& Utils.getCorruption(killer) >= 3) {
+					// heal 6.0f = 3 hearts
+					killer.heal(6.0f);
+					killer.sendMessage(Text.literal("§aYou are empowered on kill... (healed 3 hearts)"), true);
+				}
+			}
+
+		});
+
+		// Custom item events
+		UseItemCallback.EVENT.register((player, world, hand) -> {
+			if (world.isClient()) {
+				return ActionResult.PASS;
+			}
+			ItemStack stack = player.getStackInHand(hand);
+
+			// Ascension Totem: Update objective hasAscended
+			if (stack.getItem() == ModItems.ASCENSION_TOTEM) {
+				Scoreboard sb = player.getWorld().getScoreboard();
+				ScoreboardObjective obj = sb.getNullableObjective("hasAscended");
+
+				if (!Utils.getAscended((ServerPlayerEntity) player)) {
+					// Give starting corruption levels based on hearts
+					double curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue();
+					int start_level = 0;
+					EntityAttributeInstance maxHearts = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+					maxHearts.setBaseValue(20.0);
+					if (curr_hp <= 10 * 2) {
+						start_level = 0;
+					} else if (curr_hp <= 14 * 2) {
+						start_level = 1;
+					} else if (curr_hp <= 18 * 2) {
+						start_level = 2;
+					} else {
+						start_level = 3;
+					}
+
+					Utils.addCorruption((ServerPlayerEntity) player, start_level);
+					player.sendMessage(
+							Text.literal("You feel a surge of divine power! Began at " + start_level + " corruption."),
+							true);
+					sb.getOrCreateScore(player, obj).setScore(1);
+
+					// Play totem animation and particles
+					world.sendEntityStatus(player, (byte) 35); // Totem pop
+					if (world instanceof ServerWorld serverWorld) {
+						serverWorld.spawnParticles(ParticleTypes.SMOKE, player.getX(), player.getY() + 1, player.getZ(),
+								50, 0.5, 0.5, 0.5, 0.01);
+						serverWorld.spawnParticles(ParticleTypes.DRAGON_BREATH, player.getX(), player.getY() + 1,
+								player.getZ(), 20, 0.5, 0.5, 0.5, 0.01);
+					}
+					player.playSound(SoundEvents.ENTITY_WITHER_SPAWN, 1.0F, 1.0F);
+
+					stack.decrement(1);
+					return ActionResult.SUCCESS;
+				} else {
+					player.sendMessage(Text.literal("You have already ascended. There is no going back!"), true);
+					return ActionResult.FAIL;
+				}
+			}
+
+			// Soul Shard: Update corruption level -3 up to +3
+			if (stack.getItem() == ModItems.SOUL_SHARD) {
+				boolean ascended = Utils.getAscended((ServerPlayerEntity) player);
+				int corruption = Utils.getCorruption((ServerPlayerEntity) player);
+				// Player has not ascended
+				if (!ascended) {
+					player.sendMessage(Text.literal("You must ascend to grow stronger..."), true);
+					return ActionResult.FAIL;
+				}
+				// Player can increase corruption
+				if (corruption < 3) {
+					int cost = Utils.nextShardCost(corruption);
+
+					if (stack.getCount() < cost) {
+						player.sendMessage(Text.literal("Require " + cost + " Soul Shards to grow stronger."), true);
+						return ActionResult.FAIL;
+					}
+
+					stack.decrement(cost);
+					Utils.addCorruption((ServerPlayerEntity) player, 1);
+					int lvl = Utils.getCorruption((ServerPlayerEntity) player);
+					int next = Utils.nextShardCost(lvl);
+					Utils.applyCorruptionEffects((ServerPlayerEntity) player);
+					player.sendMessage(Text.literal("§5You feel stronger. Corruption: §l" + lvl + "§r. Next: " + next),
+							true);
+					return ActionResult.SUCCESS;
+				}
+				// Player has max corruption
+				if (corruption >= 3) {
+					player.sendMessage(Text.literal("Your soul is already at its peak."), true);
+					return ActionResult.FAIL;
+				}
+			}
+
+			// Soul Purifier: Update corruption level +1 up to 0
+			if (stack.getItem() == ModItems.SOUL_PURIFIER) {
+				if (Utils.getCorruption((ServerPlayerEntity) player) < 0) {
+					Utils.addCorruption((ServerPlayerEntity) player, 1);
+					int lvl = Utils.getCorruption((ServerPlayerEntity) player);
+					int next = Utils.nextShardCost(lvl);
+					stack.decrement(1);
+					Utils.applyCorruptionEffects((ServerPlayerEntity) player);
+					player.sendMessage(Text.literal("§5You feel stronger. Corruption: §l" + lvl + "§r. Next: " + next),
+							true);
+					return ActionResult.SUCCESS;
+				}
+				player.sendMessage(Text.literal("Soul purifier cannot increase corruption beyond +0."), true);
+				return ActionResult.FAIL;
+			}
+
+			if (player.isSneaking()) {
+				int slot = player.getInventory().selectedSlot;
+				return SpellRegistry.tryActivate((ServerPlayerEntity) player, slot)
+						? ActionResult.SUCCESS
+						: ActionResult.PASS;
+			}
+
+			return ActionResult.PASS;
+		});
+
+		// Passive abilities
+		ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+			// Modify XP gain based on corruption level
+			for (ServerWorld world : server.getWorlds()) {
+				for (ExperienceOrbEntity orb : world.getEntitiesByType(
+						EntityType.EXPERIENCE_ORB, o -> !o.isRemoved())) {
+
+					int id = orb.getId();
+					if (scaledOrbIds.contains(id))
+						continue;
+
+					PlayerEntity picker = world.getClosestPlayer(orb, 2.5);
+					if (!(picker instanceof ServerPlayerEntity player)
+							|| !Utils.getAscended(player)) {
+						continue;
+					}
+
+					int orig = orb.getExperienceAmount();
+					int bumped = orig;
+					if (Utils.getCorruption((ServerPlayerEntity) picker) >= 1) {
+						bumped = (int) Math.ceil(orig * 1.10);
+					} else if (Utils.getCorruption((ServerPlayerEntity) picker) <= -1) {
+						bumped = (int) Math.ceil(orig * 0.9);
+					}
+
+					// Replace the old experience orb with scaled new one
+					ExperienceOrbEntity newOrb = new ExperienceOrbEntity(
+							world, orb.getX(), orb.getY(), orb.getZ(), bumped);
+					world.spawnEntity(newOrb);
+					orb.discard();
+
+					scaledOrbIds.add(id);
+					scaledOrbIds.add(newOrb.getId());
+
+					// Clear the array, this means every 250 orbs might not be scaled but whatever
+					if (scaledOrbIds.size() > 500) {
+						scaledOrbIds.clear();
+					}
+				}
+			}
+
+			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+				if (Utils.getAscended(player)) {
+					// Remove normal totems if ascended
+					for (int i = 0; i < player.getInventory().size(); i++) {
+						ItemStack s = player.getInventory().getStack(i);
+						if (s.getItem() == Items.TOTEM_OF_UNDYING) {
+							player.getInventory().removeStack(i);
+						}
+					}
+					// +3 corruption temporary resistance when below 3 hearts
+					if (Utils.getCorruption(player) >= 3 &&
+							player.getHealth() < 6.0f && !player.hasStatusEffect(StatusEffects.RESISTANCE)) {
+						player.sendMessage(Text.literal("§aYour will strengthens... (+Resistance I)"), true);
+						player.addStatusEffect(new StatusEffectInstance(
+								StatusEffects.RESISTANCE,
+								40, // lasts 2 seconds, refreshed each tick
+								0,
+								false, false));
+					}
+				}
+			}
+		});
 	}
 }

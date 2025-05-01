@@ -1,6 +1,6 @@
 package com.immortals.mixin;
 
-import com.immortals.AscensionUtils;
+import com.immortals.Utils;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -21,8 +21,8 @@ public abstract class FallDamageImmunityMixin {
         if (source.isOf(DamageTypes.FALL)
                 && (LivingEntity) (Object) this instanceof ServerPlayerEntity player
                 && !world.isClient
-                && AscensionUtils.getAscended(player) == 1
-                && AscensionUtils.getCorruption(player) >= 1) {
+                && Utils.getAscended(player)
+                && Utils.getCorruption(player) >= 1) {
             cir.setReturnValue(false);
         }
     }

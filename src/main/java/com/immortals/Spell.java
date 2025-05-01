@@ -1,328 +1,193 @@
 package com.immortals;
 
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Queue;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.particle.DustParticleEffect;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.text.Text;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+public class Spell {
+    private static final Map<UUID, Integer> lastSlot = new ConcurrentHashMap<>();
+    public static final Map<UUID, Map<SpellRegistry, Integer>> pendingCooldownNotifications = new ConcurrentHashMap<>();
+    public static final Map<UUID, Queue<Task>> taskQueue = new ConcurrentHashMap<>();
 
-import net.minecraft.item.Items;
-import net.minecraft.item.ItemStack;
+    private static class Task {
+        private final Runnable callback;
+        private long remainingTime;
 
-import net.minecraft.particle.DustParticleEffect;
-import org.joml.Vector3f;
+        public Task(Runnable callback, long remainingTime) {
+            this.callback = callback;
+            this.remainingTime = remainingTime;
+        }
 
-/**
- * Defines all available spells, their cooldowns, activation logic,
- * and static methods to bind spells to hotbar slots and manage cooldowns.
- */
-public enum Spell {
+        public void execute() {
+            callback.run();
+        }
 
-    DASH("dash", 5_000) {
-        @Override
-        public void activate(ServerPlayerEntity player) {
-            Vec3d dir = player.getRotationVec(1.0F);
-            Vec3d startPos = player.getPos();
-            player.addVelocity(dir.x * 2.5, dir.y * 1.2, dir.z * 2.5);
-            player.velocityModified = true;
+        public long getRemainingTime() {
+            return remainingTime;
+        }
 
-            ServerWorld world = (ServerWorld) player.getWorld();
-            int rings = 3;
-            int particlesPerRing = 20;
+        public void decrementTime(long delta) {
+            this.remainingTime -= delta;
+        }
+    }
 
-            for (int i = 0; i < rings; i++) {
-                double ringRadius = 0.5 + i * 0.4; // each ring gets larger
-                double backStep = 0.6 + i * 0.5; // spacing behind player
+    public static void addTask(UUID playerId, Runnable callback, long timeInMs) {
+        taskQueue
+                .computeIfAbsent(playerId, id -> new ConcurrentLinkedQueue<>())
+                .add(new Task(callback, timeInMs));
+    }
 
-                // Center of ring behind the player
-                Vec3d ringCenter = startPos.subtract(dir.multiply(backStep));
-
-                for (int j = 0; j < particlesPerRing; j++) {
-                    double angle = 2 * Math.PI * j / particlesPerRing;
-
-                    // Circle in local (X, Z) space
-                    double localX = Math.cos(angle) * ringRadius;
-                    double localY = Math.sin(angle) * ringRadius;
-                    Vec3d localOffset = new Vec3d(localX, localY, 0);
-
-                    // Rotate local offset to align with player's look direction
-                    Vec3d rotated = rotateVectorToMatchDirection(localOffset, dir);
-                    Vec3d finalPos = ringCenter.add(rotated);
-
-                    world.spawnParticles(ParticleTypes.CLOUD, finalPos.x, finalPos.y, finalPos.z, 1, 0, 0, 0, 0.01);
+    public static void processTasks(long deltaTime) {
+        for (Map.Entry<UUID, Queue<Task>> entry : taskQueue.entrySet()) {
+            Queue<Task> queue = entry.getValue();
+            while (!queue.isEmpty() && queue.peek().getRemainingTime() <= deltaTime) {
+                Task task = queue.poll();
+                if (task != null) {
+                    task.execute();
                 }
+            }
+            if (!queue.isEmpty()) {
+                queue.peek().decrementTime(deltaTime);
             }
         }
-    },
+    }
 
-    GLOW("glow", 7_000) {
-        @Override
-        public void activate(ServerPlayerEntity player) {
-            ServerWorld world = (ServerWorld) player.getWorld();
+    public static void register() {
+        // Default bindings for dash & glow
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            ServerPlayerEntity player = handler.player;
+            // slot indices are 0-8 for hotbar 1-9
+            SpellRegistry.bind(player, 0, SpellRegistry.DASH);
+            SpellRegistry.bind(player, 1, SpellRegistry.GLOW);
+            SpellRegistry.bind(player, 2, SpellRegistry.DRAGON_ASCENT);
+        });
 
-            // 1) Apply glowing effect to nearby players
-            for (ServerPlayerEntity other : world.getPlayers()) {
-                if (!other.equals(player) && other.squaredDistanceTo(player) <= 30 * 30) {
-                    other.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 100, 0, false, false));
+        // Register bind command
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            dispatcher.register(CommandManager.literal("bind")
+                    .then(CommandManager.argument("slot", IntegerArgumentType.integer(1, 9))
+                            .then(CommandManager.argument("spell", StringArgumentType.word())
+                                    .executes(ctx -> {
+                                        ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                        int slot = IntegerArgumentType.getInteger(ctx, "slot") - 1;
+                                        String spellId = StringArgumentType.getString(ctx, "spell");
+                                        SpellRegistry spell = SpellRegistry.fromId(spellId);
+
+                                        if (spell == null) {
+                                            player.sendMessage(Text.literal("Unknown spell: " + spellId), false);
+                                            return 0;
+                                        }
+
+                                        SpellRegistry.bind(player, slot, spell);
+                                        player.sendMessage(
+                                                Text.literal("Bound " + spell.getId() + " to slot " + (slot + 1)),
+                                                false);
+                                        return 1;
+                                    }))));
+        });
+
+        // Display spell name when switching hotbar slots
+        ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+
+            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                UUID id = player.getUuid();
+                int current = player.getInventory().selectedSlot;
+                int previous = lastSlot.getOrDefault(id, -1);
+
+                // Display spell name when switching hotbar slots
+                if (current != previous) {
+                    lastSlot.put(id, current);
+
+                    SpellRegistry bound = SpellRegistry.getBound(player, current);
+                    if (bound != null) {
+                        int corr = Utils.getCorruption(player);
+                        // only show if they meet the level requirement
+                        boolean allowed = switch (bound) {
+                            case DASH -> corr >= 2;
+                            case GLOW -> corr >= 3;
+                            default -> false; // future spells get gated here
+                        };
+                        if (allowed) {
+                            player.sendMessage(Text.literal("§e" + bound.getDisplayName()), true);
+                        }
+                    }
                 }
             }
+        });
 
-            // 2) Spawn expanding sphere of gold dust
-            // center at mid‐body height
-            Vec3d center = player.getPos().add(0, player.getStandingEyeHeight() * 0.5, 0);
+        // Handle cooldown notifications
+        ServerTickEvents.START_SERVER_TICK.register(server -> {
+            if (server.getTicks() % 20 != 0)
+                return; // Run once per second
 
-            // yellow dust: RGB (1.0f, 0.84f, 0f), size 1
-            DustParticleEffect goldDust = new DustParticleEffect(0xFFD700, 3f);
+            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                UUID playerId = player.getUuid();
+                Map<SpellRegistry, Integer> cooldowns = pendingCooldownNotifications.get(playerId);
+                if (cooldowns != null) {
+                    Iterator<Map.Entry<SpellRegistry, Integer>> cooldownIterator = cooldowns.entrySet().iterator();
+                    SpellRegistry currentSpell = SpellRegistry.getBound(player, player.getInventory().selectedSlot);
 
-            int maxRadius = 30;
-            int circlePoints = 40; // points per circle
-            int layers = 18; // horizontal slices
+                    while (cooldownIterator.hasNext()) {
+                        Map.Entry<SpellRegistry, Integer> entry = cooldownIterator.next();
+                        SpellRegistry spell = entry.getKey();
+                        int secondsLeft = entry.getValue();
 
-            // Compute sphere points once
-            List<Vec3d> spherePoints = new ArrayList<>();
-            for (int i = 0; i <= layers; i++) {
-                // dy from -max to +max
-                double dy = (2.0 * maxRadius * i / layers) - maxRadius;
-                double r = Math.sqrt(maxRadius * maxRadius - dy * dy);
+                        if (secondsLeft > 0) {
+                            if (spell.equals(currentSpell)) {
+                                player.sendMessage(
+                                        Text.literal("§c" + spell.getDisplayName() + ": " + secondsLeft + "s"), true);
+                            }
+                            entry.setValue(secondsLeft - 1);
+                        } else {
+                            player.sendMessage(Text.literal("§a" + spell.getDisplayName() + " ready!"), true);
+                            cooldownIterator.remove();
+                        }
+                    }
 
-                for (int j = 0; j < circlePoints; j++) {
-                    double theta = 2 * Math.PI * j / circlePoints;
-                    double x = center.x + Math.cos(theta) * r;
-                    double y = center.y + dy;
-                    double z = center.z + Math.sin(theta) * r;
-                    spherePoints.add(new Vec3d(x, y, z));
+                    if (cooldowns.isEmpty()) {
+                        pendingCooldownNotifications.remove(playerId);
+                    }
                 }
             }
+        });
 
-            // Schedule each particle for 100 ticks (~5 seconds)
-            for (Vec3d pt : spherePoints) {
-                ModEvents.scheduleParticle(goldDust, pt, 5, world);
-            }
-
-            player.sendMessage(Text.literal("§eYou glow, revealing nearby players!"), true);
-        }
-    },
-
-    // new DustParticleEffect(0xFFD700, 3f);
-
-    DRAGON_ASCENT("dragon_ascent", 10_000) {
-        @Override
-        public void activate(ServerPlayerEntity player) {
-            // must have dragon egg
-            if (!player.getInventory().contains(new ItemStack(Items.DRAGON_EGG))) {
-                player.sendMessage(Text.literal("§cYou need a Dragon Egg to cast this spell."), true);
-                return;
-            }
-
-            Vec3d pos = player.getPos().add(0, 0.1, 0); // slightly up so particles aren’t inside floor
-            ModEvents.spawnPersistentRune(player.getUuid(), pos);
-
-            player.setVelocity(player.getVelocity().x, 1.3, player.getVelocity().z);
-            player.velocityModified = true;
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.LEVITATION, 60, 0, false, false));
-
-            ServerWorld world = (ServerWorld) player.getWorld();
-            double radius = 10.0; // detection range
-
-            // Find all living entities (players & hostiles) in range…
-            List<LivingEntity> targets = world.getEntitiesByClass(
-                    LivingEntity.class,
-                    player.getBoundingBox().expand(radius),
-                    e -> (e instanceof ServerPlayerEntity) || (e instanceof HostileEntity));
-
-            for (LivingEntity t : targets) {
-                // skip yourself
-                if (t == player)
+        ServerTickEvents.START_SERVER_TICK.register(server -> {
+            long delta = 50; // 1 tick ≈ 50ms
+            for (UUID playerId : taskQueue.keySet()) {
+                Queue<Task> queue = taskQueue.get(playerId);
+                if (queue == null)
                     continue;
 
-                // SKIP any teammate (vanilla scoreboard teams)…
-                if (t.isTeammate(player))
-                    continue;
+                List<Task> stillWaiting = new ArrayList<>();
+                for (Task t : queue) {
+                    t.decrementTime(delta);
+                    if (t.getRemainingTime() <= 0) {
+                        t.execute();
+                    } else {
+                        stillWaiting.add(t);
+                    }
+                }
 
-                Vec3d tpos = t.getPos().add(0, t.getStandingEyeHeight() * 0.5, 0);
-                // immediate lightning
-                ModEvents.scheduleLightning(world, tpos, 1);
-                // delayed 2 ticks (1/10th sec)
-                ModEvents.scheduleLightning(world, tpos, 2);
+                // replace the queue contents atomically
+                queue.clear();
+                queue.addAll(stillWaiting);
             }
-
-            player.sendMessage(Text.literal("§dThe dragon rune lifts you skyward!"), true);
-        }
-    };
-
-    private final String id;
-    private final long cooldownMs;
-
-    Spell(String id, long cooldownMs) {
-        this.id = id;
-        this.cooldownMs = cooldownMs;
+        });
     }
-
-    /** Get capitalized display name for spell */
-    public String getDisplayName() {
-        String[] words = id.split("_");
-        StringBuilder displayName = new StringBuilder();
-        for (String word : words) {
-            displayName.append(Character.toUpperCase(word.charAt(0)))
-                    .append(word.substring(1))
-                    .append(" ");
-        }
-        return displayName.toString().trim();
-    }
-
-    /** The unique identifier players will use in `/bind ...` */
-    public String getId() {
-        return id;
-    }
-
-    /** Milliseconds between uses */
-    public long getCooldownMs() {
-        return cooldownMs;
-    }
-
-    /** Concrete spells implement their effect here */
-    public abstract void activate(ServerPlayerEntity player);
-
-    /** player UUID → (hotbar slot → Spell) */
-    private static final Map<UUID, Map<Integer, Spell>> BINDINGS = new ConcurrentHashMap<>();
-
-    /** player UUID → (Spell → last use timestamp ms) */
-    private static final Map<UUID, Map<Spell, Long>> LAST_USED = new ConcurrentHashMap<>();
-
-    /**
-     * Bind a spell to a 0-8 hotbar slot, replacing any existing binding for the
-     * spell
-     */
-    public static void bind(ServerPlayerEntity player, int slot, Spell spell) {
-        var bindings = BINDINGS.computeIfAbsent(player.getUuid(), u -> new HashMap<>());
-
-        // Remove the existing binding for the spell, if any
-        bindings.entrySet().removeIf(entry -> entry.getValue() == spell);
-
-        // Add the new binding
-        bindings.put(slot, spell);
-    }
-
-    /** Get the Spell bound to this slot, or null */
-    public static Spell getBound(ServerPlayerEntity player, int slot) {
-        var map = BINDINGS.get(player.getUuid());
-        return map == null ? null : map.get(slot);
-    }
-
-    /** Has the spell’s cooldown expired? */
-    public static boolean canUse(ServerPlayerEntity player, Spell spell) {
-        var map = LAST_USED.get(player.getUuid());
-        if (map == null)
-            return true;
-        Long last = map.get(spell);
-        if (last == null)
-            return true;
-        return (System.currentTimeMillis() - last) >= spell.cooldownMs;
-    }
-
-    /** Record that the player just used this spell */
-    public static void recordUse(ServerPlayerEntity player, Spell spell) {
-        LAST_USED
-                .computeIfAbsent(player.getUuid(), u -> new HashMap<>())
-                .put(spell, System.currentTimeMillis());
-        // right after Spell.recordUse(player, spell) inside your Activate callback:
-        long cd = spell.getCooldownMs();
-        int secs = (int) Math.ceil(cd / 1000.0);
-        ModEvents.pendingCooldownNotifications
-                .computeIfAbsent(player.getUuid(), u -> new ConcurrentHashMap<>())
-                .put(spell, secs);
-    }
-
-    /**
-     * Attempt to activate—returns true on success, false if unbound or on cooldown
-     */
-    public static boolean tryActivate(ServerPlayerEntity player, int slot) {
-        // must have ascended
-        if (AscensionUtils.getAscended(player) != 1) {
-            return false;
-        }
-        int corr = AscensionUtils.getCorruption(player);
-        Spell spell = getBound(player, slot);
-
-        // level requirements
-        if (spell == DASH && corr < 2) {
-            return false;
-        }
-        if (spell == GLOW && corr < 3) {
-            return false;
-        }
-        // Egg Rune special requirement
-        if (spell == DRAGON_ASCENT && !player.getInventory().contains(new ItemStack(Items.DRAGON_EGG))) {
-            player.sendMessage(Text.literal("§cYou must carry a Dragon Egg to use this spell."), true);
-            return false;
-        }
-
-        if (spell == null) {
-            player.sendMessage(Text.literal("No spell bound to slot " + (slot + 1)), true);
-            return false;
-        }
-
-        // cooldown check (unchanged)
-        if (!canUse(player, spell)) {
-            player.sendMessage(Text.literal("§c" + spell.getDisplayName() + " is on cooldown!"), true);
-            return false;
-        }
-
-        // activate
-        spell.activate(player);
-        recordUse(player, spell);
-        return true;
-    }
-
-    /** Helper to look up by name in your /bind command */
-    public static Spell fromId(String id) {
-        for (Spell s : values()) {
-            if (s.id.equalsIgnoreCase(id))
-                return s;
-        }
-        return null;
-    }
-
-    /** For tab‐completion in your command */
-    public static Collection<String> allIds() {
-        List<String> ids = new ArrayList<>();
-        for (Spell s : values())
-            ids.add(s.id);
-        return ids;
-    }
-
-    public static long getLastUse(ServerPlayerEntity player, Spell spell) {
-        var map = LAST_USED.get(player.getUuid());
-        return map == null ? 0L : map.getOrDefault(spell, 0L);
-    }
-
-    private static Vec3d rotateVectorToMatchDirection(Vec3d vec, Vec3d direction) {
-        // Get yaw and pitch from the direction vector
-        float yaw = (float) Math.atan2(-direction.x, direction.z);
-        float pitch = (float) Math.asin(-direction.y);
-
-        // Rotate around X axis (pitch)
-        double cosPitch = Math.cos(pitch);
-        double sinPitch = Math.sin(pitch);
-        double y1 = vec.y * cosPitch - vec.z * sinPitch;
-        double z1 = vec.y * sinPitch + vec.z * cosPitch;
-
-        // Rotate around Y axis (yaw)
-        double cosYaw = Math.cos(yaw);
-        double sinYaw = Math.sin(yaw);
-        double x2 = vec.x * cosYaw - z1 * sinYaw;
-        double z2 = vec.x * sinYaw + z1 * cosYaw;
-
-        return new Vec3d(x2, y1, z2);
-    }
-
 }
