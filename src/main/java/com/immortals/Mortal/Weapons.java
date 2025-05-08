@@ -1,6 +1,8 @@
-// src/main/java/com/immortals/PhasebreakerEvents.java
-package com.immortals;
+package com.immortals.Mortal;
 
+import com.immortals.Main;
+import com.immortals.Utils;
+import com.immortals.immortal.Spell;
 import com.immortals.item.ModItems;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
@@ -31,20 +33,18 @@ public class Weapons {
     // Track each mortal’s Fractal Edge count
     private static final Map<UUID, Integer> fractalCount = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> PHASE_CHANGE_COOLDOWNS = new ConcurrentHashMap<>();
-    private static UUID lastPhasebreakerOwner = null;
-    private static final long PHASE_CHANGE_COOLDOWN_MS = 3_000;
+    private static final long PHASE_CHANGE_COOLDOWN_MS = Main.CONFIG.phaseChangeCooldown;
 
     public static void register() {
-        // 1) Unlock: right-click a Dragon Egg to get Phasebreaker
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (world.isClient || Utils.getAscended((ServerPlayerEntity) player))
                 return ActionResult.PASS;
+            // If the player is mortal and uses the dragon egg, they unlock phasebreaker
             ItemStack inHand = player.getStackInHand(hand);
             if (inHand.getItem() == Items.DRAGON_EGG && Utils.findInInventory(player, ModItems.PHASEBREAKER) == null) {
                 inHand.decrement(1);
                 player.getInventory().offerOrDrop(new ItemStack(ModItems.PHASEBREAKER));
-                player.sendMessage(Text.literal("§aYou have unlocked the DRK-07 Phasebreaker!"), true);
-                lastPhasebreakerOwner = player.getUuid();
+                player.sendMessage(Text.literal("§aYou have constructed the DRK-07 Phasebreaker!"), true);
                 return ActionResult.SUCCESS;
             } else if (inHand.getItem() == ModItems.PHASEBREAKER && player.isSneaking()) {
                 UUID id = player.getUuid();
@@ -56,12 +56,12 @@ public class Weapons {
                     return ActionResult.SUCCESS;
                 }
 
-                // compute teleport target
+                // Compute teleport target
                 Vec3d eye = player.getCameraPosVec(1.0f);
                 Vec3d look = player.getRotationVec(1.0f).normalize();
                 Vec3d far = eye.add(look.multiply(15.0));
 
-                // raycast (stop at first block hit)
+                // Raycast (stop at first block hit)
                 BlockHitResult hit = world.raycast(new RaycastContext(
                         eye, far,
                         RaycastContext.ShapeType.COLLIDER,
@@ -69,7 +69,7 @@ public class Weapons {
                         player));
 
                 Vec3d target = hit.getType() == HitResult.Type.BLOCK
-                        // back off one step so we don’t end up inside a block
+                        // Back off one step so we don’t end up inside a block
                         ? hit.getPos().subtract(look.multiply(1.0))
                         : far;
 
@@ -85,20 +85,20 @@ public class Weapons {
                     }
                 }
 
-                // teleport on server
+                // Teleport on server
                 if (player instanceof ServerPlayerEntity sp) {
-                    // make an empty flag set so it won't try to recalculate your Y:
+                    // Make an empty flag set so you can teleport to the air
                     Set<PositionFlag> flags = EnumSet.noneOf(PositionFlag.class);
                     sp.teleport(
                             (ServerWorld) world,
                             target.x, target.y, target.z,
                             flags,
                             player.getYaw(), player.getPitch(),
-                            false // don't reset camera
+                            false // Don't reset camera
                     );
                 }
 
-                // record cooldown
+                // Record cooldown
                 PHASE_CHANGE_COOLDOWNS.put(id, now);
                 player.sendMessage(Text.literal("§aPhase Change!"), true);
                 player.playSound(SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
@@ -108,15 +108,12 @@ public class Weapons {
             return ActionResult.PASS;
         });
 
-        // 2) Death behavior: mortal with Phasebreaker drops back a Dragon Egg, not the
-        // sword.
+        // If a mortal dies with Phasebreaker, it transforms back to a dragon egg
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
-            if (!(entity instanceof ServerPlayerEntity victim))
+            if (!(entity instanceof ServerPlayerEntity victim) || Utils.getAscended(victim))
                 return true;
-            if (Utils.getAscended(victim))
-                return true; // only care about mortals
 
-            // scan each slot, clear Phasebreaker(s)
+            // Scan each slot, clear Phasebreaker(s)
             var inv = victim.getInventory();
             boolean hadOne = false;
             for (int i = 0; i < inv.size(); i++) {
@@ -128,7 +125,7 @@ public class Weapons {
             }
 
             if (hadOne) {
-                // drop back a Dragon Egg
+                // Drop dragon egg
                 ServerWorld w = (ServerWorld) victim.getWorld();
                 w.spawnEntity(new ItemEntity(
                         w,
@@ -136,51 +133,44 @@ public class Weapons {
                         new ItemStack(Items.DRAGON_EGG)));
             }
 
-            return true; // allow the death to proceed
+            return true; // Allow the death to proceed
         });
 
-        // 3) Fractal Edge: count non-Weakened hits
+        // Fractal Edge ability
         AttackEntityCallback.EVENT.register((player, world, hand, target, hitResult) -> {
-            if (world.isClient)
+            if (world.isClient || !(player instanceof ServerPlayerEntity sp) || Utils.getAscended(sp))
                 return ActionResult.PASS;
-            if (!(player instanceof ServerPlayerEntity sp))
-                return ActionResult.PASS;
-            if (Utils.getAscended(sp))
-                return ActionResult.PASS; // only mortals
 
             ItemStack weapon = sp.getStackInHand(hand);
             if (weapon.getItem() != ModItems.PHASEBREAKER)
                 return ActionResult.PASS;
 
-            // ── ONLY count if it was a *fully-charged* swing (i.e. no “weak” spam hits) ──
-            // 0.5F here is the interpolation tick; you can also pass 0 if you like.
+            // Increment by one if it's a fully charged attack and not a weak hit
             if (sp.getAttackCooldownProgress(0.5F) < 0.84F) {
                 return ActionResult.PASS;
             }
 
             UUID id = sp.getUuid();
             int count = fractalCount.getOrDefault(id, 0) + 1;
-            System.out.println("Hits: " + count);
             fractalCount.put(id, count);
 
             if (count >= 7) {
                 if (target instanceof LivingEntity ent) {
-                    // a) Propel them 5 blocks away:
+                    // Propel target 5 blocks away
                     Vec3d dir = ent.getPos().subtract(sp.getPos()).normalize();
                     ent.setVelocity(dir.x * 2.5, 0.5, dir.z * 2.5);
                     ent.velocityModified = true;
 
-                    // b) Deal 8 HP bypassing armor & magic resistance:
+                    // Deal 8 HP bypassing armor & magic resistance:
                     DamageSource ds = ((ServerWorld) world)
                             .getDamageSources()
                             .magic();
                     for (int i = 0; i < 4; i++) {
-                        final int index = i; // Create a final variable for use in the lambda
-                        int delay = index * 500; // Delay between each damage (500 ms = 0.5 seconds)
+                        final int index = i;
+                        int delay = index * 500;
                         UUID playerId = sp.getUuid();
                         Spell.addTask(playerId, () -> {
-                            // Damage the entity
-                            ent.damage((ServerWorld) world, ds, 2.0f); // 1 heart = 2 HP
+                            ent.damage((ServerWorld) world, ds, 10.0f);
 
                             // Spawn sweep attack particles in front of the entity
                             for (int j = 0; j < 3; j++) {
@@ -191,6 +181,7 @@ public class Weapons {
                                             ParticleTypes.SWEEP_ATTACK,
                                             particlePos.x, particlePos.y + ent.getHeight() * 0.5, particlePos.z,
                                             3, 0.5, 0.5, 0.5, 0.0);
+                                    ent.playSound(SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 1.0F, 1.0F);
                                 }, j * (500 / 3));
                             }
 
@@ -202,6 +193,7 @@ public class Weapons {
             return ActionResult.PASS;
         });
 
+        // Display cooldown messages
         ServerTickEvents.START_SERVER_TICK.register(server -> {
             if (server.getTicks() % 20 != 0)
                 return;
@@ -212,7 +204,6 @@ public class Weapons {
                 Long last = PHASE_CHANGE_COOLDOWNS.get(id);
 
                 if (last == null) {
-                    // never used: no message
                     continue;
                 }
 
@@ -224,34 +215,27 @@ public class Weapons {
                     player.sendMessage(Text.literal("§ePhase Change: " + secsLeft + "s"), true);
                 } else {
                     player.sendMessage(Text.literal("§aPhase Change ready!"), true);
-                    // once we show “ready”, we can remove the entry so it won’t repeat:
+                    // Remove entry to prevent further messages
                     PHASE_CHANGE_COOLDOWNS.remove(id);
                 }
             }
         });
 
+        // Check if Phasebreaker's owner has changed and transform it into a dragon egg
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (ServerWorld world : server.getWorlds()) {
                 for (ServerPlayerEntity player : world.getPlayers()) {
-                    UUID pid = player.getUuid();
-
-                    // 1) Check if they have any Phasebreaker in *their* inventory:
-                    var inv = player.getInventory().main;
-                    for (int i = 0; i < inv.size(); i++) {
-                        ItemStack stack = inv.get(i);
-                        if ((stack.getItem() == ModItems.PHASEBREAKER || stack.getItem() == Items.DRAGON_EGG)
-                                && !Objects.equals(pid, lastPhasebreakerOwner)) {
-                            // Replace the Phasebreaker with a Dragon Egg
+                    if (Utils.getAscended(player)) {
+                        var inv = player.getInventory().main;
+                        for (int i = 0; i < inv.size(); i++) {
+                            ItemStack stack = inv.get(i);
                             if (stack.getItem() == ModItems.PHASEBREAKER) {
                                 inv.set(i, new ItemStack(Items.DRAGON_EGG));
                                 player.sendMessage(
-                                        Text.literal(
-                                                "§cPhasebreaker transformed back into a Dragon Egg!"),
+                                        Text.literal("§cPhasebreaker transformed back into a Dragon Egg!"),
                                         true);
+                                break;
                             }
-                            lastPhasebreakerOwner = pid;
-                            System.out.println(lastPhasebreakerOwner);
-                            break;
                         }
                     }
                 }

@@ -17,8 +17,7 @@
 	"entrypoints": {
 		"main": [
 			"com.immortals.Main"
-		],
-		"client": []
+		]
 	},
 	"depends": {
 		"fabricloader": ">=0.16.10",

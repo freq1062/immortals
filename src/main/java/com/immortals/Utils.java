@@ -8,48 +8,39 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.particle.ParticleTypes;
+
+import com.immortals.api.PlayerImmortalsData;
+
 import net.minecraft.entity.EntityType;
-import net.minecraft.scoreboard.ReadableScoreboardScore;
 
 public class Utils {
     // Return true if the player is ascended (immortal), false otherwise
     public static boolean getAscended(ServerPlayerEntity player) {
-        Scoreboard sb = player.getWorld().getScoreboard();
-        ScoreboardObjective obj = sb.getNullableObjective("hasAscended");
-        if (obj == null) {
-            return false;
-        }
+        PlayerImmortalsData data = (PlayerImmortalsData) player;
+        return data.isImmortal();
+    }
 
-        ReadableScoreboardScore score = sb.getScore(player, obj);
-        return score != null && score.getScore() == 1;
+    public static void setAscended(ServerPlayerEntity player, boolean ascended) {
+        PlayerImmortalsData data = (PlayerImmortalsData) player;
+        data.setImmortal(ascended);
     }
 
     // Return the player's corruption level
     public static int getCorruption(ServerPlayerEntity player) {
-        Scoreboard sb = player.getWorld().getScoreboard();
-        ScoreboardObjective obj = sb.getNullableObjective("corruptionLevel");
-        if (obj == null) {
-            return 0;
-        }
-
-        ReadableScoreboardScore score = sb.getScore(player, obj);
-        return score != null ? score.getScore() : 0;
+        PlayerImmortalsData data = (PlayerImmortalsData) player;
+        return data.getCorruption();
     }
 
     // Add [level] to the player's corruption
     public static void addCorruption(ServerPlayerEntity player, int level) {
-        Scoreboard sb = player.getWorld().getScoreboard();
-        ScoreboardObjective obj = sb.getNullableObjective("corruptionLevel");
-        int curr = getCorruption(player);
-        sb.getOrCreateScore(player, obj).setScore(curr + level);
+        PlayerImmortalsData data = (PlayerImmortalsData) player;
+        data.setCorruption(data.getCorruption() + level);
     }
 
     // Helper function for getting the next shard cost based on the corruption level

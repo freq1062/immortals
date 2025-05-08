@@ -21,8 +21,7 @@ public abstract class FallDamageImmunityMixin {
         if (source.isOf(DamageTypes.FALL)
                 && (LivingEntity) (Object) this instanceof ServerPlayerEntity player
                 && !world.isClient
-                && Utils.getAscended(player)
-                && Utils.getCorruption(player) >= 1) {
+                && Utils.getAscended(player)) {
             cir.setReturnValue(false);
         }
     }

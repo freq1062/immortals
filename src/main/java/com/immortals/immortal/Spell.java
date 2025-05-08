@@ -1,4 +1,4 @@
-package com.immortals;
+package com.immortals.immortal;
 
 import java.util.Map;
 import java.util.UUID;
@@ -9,12 +9,14 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import com.immortals.Utils;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -69,20 +71,17 @@ public class Spell {
     }
 
     public static void register() {
-        // Default bindings for dash & glow
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            ServerPlayerEntity player = handler.player;
-            // slot indices are 0-8 for hotbar 1-9
-            SpellRegistry.bind(player, 0, SpellRegistry.DASH);
-            SpellRegistry.bind(player, 1, SpellRegistry.GLOW);
-            SpellRegistry.bind(player, 2, SpellRegistry.DRAGON_ASCENT);
-        });
-
-        // Register bind command
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            // Register bind command
             dispatcher.register(CommandManager.literal("bind")
                     .then(CommandManager.argument("slot", IntegerArgumentType.integer(1, 9))
                             .then(CommandManager.argument("spell", StringArgumentType.word())
+                                    .suggests((ctx, builder) -> {
+                                        for (String spellId : SpellRegistry.allIds()) {
+                                            builder.suggest(spellId);
+                                        }
+                                        return builder.buildFuture();
+                                    })
                                     .executes(ctx -> {
                                         ServerPlayerEntity player = ctx.getSource().getPlayer();
                                         int slot = IntegerArgumentType.getInteger(ctx, "slot") - 1;
@@ -95,11 +94,35 @@ public class Spell {
                                         }
 
                                         SpellRegistry.bind(player, slot, spell);
-                                        player.sendMessage(
-                                                Text.literal("Bound " + spell.getId() + " to slot " + (slot + 1)),
-                                                false);
+                                        player.sendMessage(Text.literal("§aSpell bound to slot " + (slot + 1)),
+                                                true);
                                         return 1;
                                     }))));
+
+            dispatcher.register(CommandManager.literal("unbind")
+                    // Register unbind command
+                    .then(CommandManager.argument("spell", StringArgumentType.word())
+                            .suggests((ctx, builder) -> {
+                                for (String spellId : SpellRegistry.allIds()) {
+                                    builder.suggest(spellId);
+                                }
+                                return builder.buildFuture();
+                            })
+                            .executes(ctx -> {
+                                ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                String spellId = StringArgumentType.getString(ctx, "spell");
+                                SpellRegistry spell = SpellRegistry.fromId(spellId);
+
+                                if (spell == null) {
+                                    player.sendMessage(Text.literal("Unknown spell: " + spellId), false);
+                                    return 0;
+                                }
+
+                                SpellRegistry.unbind(player, spell);
+                                player.sendMessage(Text.literal("§aSpell unbound: " + spell.getDisplayName()),
+                                        true);
+                                return 1;
+                            })));
         });
 
         // Display spell name when switching hotbar slots
@@ -115,12 +138,14 @@ public class Spell {
                     lastSlot.put(id, current);
 
                     SpellRegistry bound = SpellRegistry.getBound(player, current);
-                    if (bound != null) {
+                    if (bound != null && SpellRegistry.canUse(player, bound) && Utils.getAscended(player)) {
                         int corr = Utils.getCorruption(player);
                         // only show if they meet the level requirement
                         boolean allowed = switch (bound) {
                             case DASH -> corr >= 2;
                             case GLOW -> corr >= 3;
+                            case DRAGON_ASCENT -> player.getInventory().contains(new ItemStack(Items.DRAGON_EGG));
+                            // Only show if player has the dragon egg
                             default -> false; // future spells get gated here
                         };
                         if (allowed) {

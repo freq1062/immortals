@@ -1,0 +1,250 @@
+package com.immortals;
+
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.entity.boss.ServerBossBar;
+import net.minecraft.loot.LootTables;
+import net.minecraft.entity.boss.BossBar;
+import net.minecraft.world.Heightmap;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Random;
+
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+
+public class SupplyDropEvents {
+    private static boolean drop = false;
+    private static final Map<BlockPos, SupplyDrop> drops = new ConcurrentHashMap<>();
+    private static int supplyDropRadius = Main.CONFIG.supplyDropRadius;
+    private static long supplyDropIntervalMs = Main.CONFIG.supplyDropIntervalMs;
+    private static long supplyDropUnlockTime = Main.CONFIG.supplyDropUnlockTime;
+
+    private static long lastSpawnTime = 0; // Track last spawn
+
+    private static class SupplyDrop {
+        final BlockPos pos;
+        boolean unlocked;
+        long unlockAt;
+        ServerBossBar bar;
+
+        SupplyDrop(BlockPos pos) {
+            this.pos = pos;
+            this.unlocked = false;
+            this.unlockAt = 0;
+            this.bar = new ServerBossBar(
+                    Text.literal("Supply Drop at [" + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "]"),
+                    BossBar.Color.WHITE,
+                    BossBar.Style.PROGRESS);
+        }
+    }
+
+    public static void register() {
+        CommandRegistrationCallback.EVENT.register((dispatcher, environment, registryAccess) -> {
+            // spawnsupply <x> <y> <z>: Spawns a locked supply drop at the given coordinates
+            dispatcher.register(
+                    CommandManager.literal("spawnsupply")
+                            .then(CommandManager.argument("x", IntegerArgumentType.integer())
+                                    .then(CommandManager.argument("y", IntegerArgumentType.integer())
+                                            .then(CommandManager.argument("z", IntegerArgumentType.integer())
+                                                    .executes(ctx -> {
+                                                        ServerPlayerEntity p = ctx.getSource().getPlayer();
+                                                        ServerWorld world = (ServerWorld) p.getWorld();
+                                                        int x = IntegerArgumentType.getInteger(ctx, "x");
+                                                        int y = IntegerArgumentType.getInteger(ctx, "y");
+                                                        int z = IntegerArgumentType.getInteger(ctx, "z");
+
+                                                        // Handle relative coordinates (~ ~ ~)
+                                                        BlockPos playerPos = p.getBlockPos();
+                                                        if (ctx.getInput().contains("~")) {
+                                                            x += playerPos.getX();
+                                                            y += playerPos.getY();
+                                                            z += playerPos.getZ();
+                                                        }
+
+                                                        BlockPos pos = new BlockPos(x, y, z);
+                                                        world.setBlockState(pos, Blocks.CHEST.getDefaultState());
+                                                        drops.put(pos, new SupplyDrop(pos));
+                                                        ctx.getSource()
+                                                                .sendFeedback(
+                                                                        () -> Text.literal(
+                                                                                "Spawned locked supply drop at " + pos),
+                                                                        false);
+                                                        world.getServer().getPlayerManager().broadcast(
+                                                                Text.literal(
+                                                                        "§6[Supply Drop] Summoned at x=" + pos.getX() +
+                                                                                ", y=" + pos.getY() + ", z="
+                                                                                + pos.getZ() + "!"),
+                                                                false);
+                                                        return 1;
+                                                    })))
+                                    .executes(ctx -> {
+                                        // Handle case where no coordinates are provided (use player's position)
+                                        ServerPlayerEntity p = ctx.getSource().getPlayer();
+                                        ServerWorld world = (ServerWorld) p.getWorld();
+                                        BlockPos pos = p.getBlockPos();
+                                        world.setBlockState(pos, Blocks.CHEST.getDefaultState());
+                                        drops.put(pos, new SupplyDrop(pos));
+                                        ctx.getSource()
+                                                .sendFeedback(
+                                                        () -> Text.literal(
+                                                                "Spawned locked supply drop at your position " + pos),
+                                                        false);
+                                        world.getServer().getPlayerManager().broadcast(
+                                                Text.literal(
+                                                        "§6[Supply Drop] Summoned at x=" + pos.getX() +
+                                                                ", y=" + pos.getY() + ", z="
+                                                                + pos.getZ() + "!"),
+                                                false);
+                                        return 1;
+                                    })));
+            // supplydrop <start|stop>: Defaults to stop on server start
+            dispatcher.register(
+                    CommandManager.literal("supplydrop")
+                            .then(CommandManager.literal("start")
+                                    .executes(ctx -> {
+                                        drop = true;
+                                        ctx.getSource().sendFeedback(
+                                                () -> Text.literal("Supply Drop timer started!"), false);
+                                        return 1;
+                                    }))
+                            .then(CommandManager.literal("stop")
+                                    .executes(ctx -> {
+                                        drop = false;
+                                        ctx.getSource().sendFeedback(
+                                                () -> Text.literal("Supply Drop timer stopped!"), false);
+                                        return 1;
+                                    })));
+        });
+
+        // Disallow players from just breaking the supply drop chest
+        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
+            SupplyDrop sd = drops.get(pos);
+            if (sd != null && !sd.unlocked) {
+                player.sendMessage(Text.literal("You decided not to break the supply."), true);
+                return false;
+            }
+            return true;
+        });
+
+        // Unlocking logic
+        UseBlockCallback.EVENT.register((player, worldIn, hand, hit) -> {
+            if (!(worldIn instanceof ServerWorld world))
+                return ActionResult.PASS;
+            BlockPos pos = ((BlockHitResult) hit).getBlockPos();
+            SupplyDrop sd = drops.get(pos);
+            if (sd == null || sd.unlocked)
+                return ActionResult.PASS;
+
+            // lock still in progress
+            if (sd.unlockAt == 0) {
+                sd.unlockAt = System.currentTimeMillis() + supplyDropUnlockTime;
+                sd.bar.setPercent(0f);
+                // show bossbar to all nearby (within 50 blocks)
+                world.getPlayers().forEach(pl -> {
+                    if (pl.squaredDistanceTo(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5) < 50 * 50)
+                        sd.bar.addPlayer(pl);
+                });
+                // Broadcast the unlocking message
+                world.getServer().getPlayerManager().broadcast(
+                        Text.literal("§c" + player.getName().getString() + " is unlocking the supply drop at " +
+                                "**" + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "**!"),
+                        false);
+            }
+            player.sendMessage(Text.literal("Supply Drop is being unlocked."), true);
+            return ActionResult.FAIL;
+        });
+
+        // Timer logic
+        ServerTickEvents.START_SERVER_TICK.register(server -> {
+            long now = System.currentTimeMillis();
+
+            if (drop && now - lastSpawnTime >= supplyDropIntervalMs) {
+                ServerWorld overworld = server.getWorld(ServerWorld.OVERWORLD);
+                int needed = 3 - (int) drops.values().stream().filter(sd -> !sd.unlocked).count();
+
+                if (needed > 0) {
+                    Random rnd = new Random();
+                    int x = rnd.nextInt(supplyDropRadius * 2 + 1) - supplyDropRadius;
+                    int z = rnd.nextInt(supplyDropRadius * 2 + 1) - supplyDropRadius;
+                    int y = overworld.getTopY(
+                            Heightmap.Type.WORLD_SURFACE, x, z);
+                    BlockPos pos = new BlockPos(x, y, z);
+
+                    int attempts = 0;
+                    boolean foundValid = false;
+                    while (attempts < 10) {
+                        // Check if the block is water, skip if it is
+                        if (!overworld.getBlockState(pos).isOf(Blocks.WATER)) {
+                            foundValid = true;
+                            break;
+                        }
+                        // Retry with a new random position
+                        x = rnd.nextInt(supplyDropRadius * 2 + 1) - supplyDropRadius;
+                        z = rnd.nextInt(supplyDropRadius * 2 + 1) - supplyDropRadius;
+                        y = overworld.getTopY(Heightmap.Type.WORLD_SURFACE, x, z);
+                        attempts++;
+                    }
+                    // If no valid position found after 10 attempts, pick one more and keep it
+                    if (!foundValid) {
+                        x = rnd.nextInt(supplyDropRadius * 2 + 1) - supplyDropRadius;
+                        z = rnd.nextInt(supplyDropRadius * 2 + 1) - supplyDropRadius;
+                        y = overworld.getTopY(Heightmap.Type.WORLD_SURFACE, x, z);
+                    }
+                    // Move it to sea level if at bottom of world (Unloaded chunk)
+                    if (y <= overworld.getBottomY()) {
+                        y = overworld.getSeaLevel();
+                    }
+                    pos = new BlockPos(x, y, z);
+                    System.out.println("Found valid at " + pos);
+                    // Spawn the supply drop
+                    overworld.setBlockState(pos, Blocks.CHEST.getDefaultState());
+                    drops.put(pos, new SupplyDrop(pos));
+                    server.getPlayerManager().broadcast(
+                            Text.literal("§6[Supply Drop] Incoming at x=" + pos.getX() + ", y=" + pos.getY() + ", z="
+                                    + pos.getZ() + "!"),
+                            false);
+                }
+                lastSpawnTime = now;
+            }
+
+            // Update each drop’s unlock bar & handle completion
+            ServerWorld overworld = server.getWorld(ServerWorld.OVERWORLD);
+            for (SupplyDrop sd : drops.values()) {
+                if (sd.unlocked || sd.unlockAt == 0)
+                    continue;
+                long remaining = sd.unlockAt - now;
+                if (remaining > 0) {
+                    float pct = (float) (supplyDropUnlockTime - remaining) / supplyDropUnlockTime;
+                    sd.bar.setPercent(pct);
+                } else {
+                    sd.unlocked = true;
+                    // Spawn a new chest in case it was broken
+                    overworld.setBlockState(sd.pos, Blocks.CHEST.getDefaultState());
+                    if (overworld.getBlockEntity(sd.pos) instanceof ChestBlockEntity chestBE) {
+                        // Loot table
+                        chestBE.setLootTable(LootTables.ANCIENT_CITY_CHEST, sd.pos.asLong());
+                    }
+                    sd.bar.setPercent(1f);
+                    sd.bar.setName(Text.literal("Supply Drop Unlocked!"));
+                    // Broadcast the unlocking message
+                    server.getPlayerManager().broadcast(
+                            Text.literal("§aSupply Drop at " + sd.pos + " has been opened!"), false);
+                    // Remove bossbar
+                    sd.bar.getPlayers().forEach(sd.bar::removePlayer);
+                }
+            }
+        });
+    }
+}

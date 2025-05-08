@@ -1,5 +1,6 @@
-package com.immortals;
+package com.immortals.Mortal;
 
+import com.immortals.Utils;
 import com.immortals.item.ModItems;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 
@@ -14,29 +15,18 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
+import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 
-/* Implements the Mortals' Lifesteal system.
-
-When a mortal is killed by a mortal player, the victim loses 1 max heart and the killer gains 1 max heart (heart item dropped on ground).
-When a mortal dies to natural causes, a heart is dropped where they died
-When a mortal kills an immortal, the number of hearts they receive scales depending on the corruption level
-
-<= +1: 1 heart
-+2: 2 hearts
-+3: 3 hearts
-
-/withdraw [number]: Withdraws up to [number of hearts - 1] hearts and converts them to items.
-
- */
-
+/* Implements the Mortals' Lifesteal system. */
 public class Mortals {
     public static void register() {
         // Lose 1 heart on death
         ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
-            if (!Utils.getAscended(newPlayer)) {
+            if (!Utils.getAscended(newPlayer)
+                    && oldPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue() > 2.0) {
                 EntityAttributeInstance old_hp = oldPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                 EntityAttributeInstance new_hp = newPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                 new_hp.setBaseValue(old_hp.getBaseValue() - 2.0);
@@ -60,7 +50,7 @@ public class Mortals {
                     EntityAttributeInstance mhVic = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                     if (mhVic.getBaseValue() <= 2.0) {
                         // banned ):
-                        mhVic.setBaseValue(8.0); // Restart player at 3 hearts, - 1 on respawn
+                        mhVic.setBaseValue(6.0); // Restart player at 3 hearts
                         String playerName = victim.getNameForScoreboard();
                         String reason = "You have run out of hearts!";
                         String command = String.format("tempban %s 24h %s", playerName, reason);
@@ -75,7 +65,7 @@ public class Mortals {
                 }
 
                 // Mortals kill immortals
-                if (victimImmortal && !attackerImmortal) {
+                if (victimImmortal && attacker instanceof ServerPlayerEntity && !attackerImmortal) {
                     int corr = Utils.getCorruption(victim);
                     int heartsToGive = switch (corr) {
                         case 2 -> 2;
@@ -143,23 +133,39 @@ public class Mortals {
                                     player.sendMessage(Text.literal("Invalid amount of hearts to withdraw."), false);
                                     return 0;
                                 }
+                                double totalHpToWithdraw = heartsToWithdraw * 2;
 
                                 // Reduce player's max health
                                 player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
-                                        .setBaseValue(maxHealth - heartsToWithdraw);
-                                player.setHealth((float) Math.min(currentHealth, maxHealth - (heartsToWithdraw * 2)));
+                                        .setBaseValue(maxHealth - totalHpToWithdraw);
+                                player.setHealth((float) Math.min(currentHealth, maxHealth - totalHpToWithdraw));
 
-                                // Give the player the withdrawn hearts as an item (e.g., Heart Shard)
-                                // Assuming there's an item called "Heart Shard" in your mod
+                                // Give the player hearts
                                 ItemStack heartShard = new ItemStack(ModItems.HEART, heartsToWithdraw);
                                 if (!player.getInventory().insertStack(heartShard)) {
                                     player.dropItem(heartShard, false);
                                 }
 
-                                player.sendMessage(Text.literal("You have withdrawn " + heartsToWithdraw + " hearts."),
+                                player.sendMessage(Text.literal("Withdrew " + heartsToWithdraw + " hearts."),
                                         false);
                                 return 1;
                             })));
+            dispatcher.register(CommandManager.literal("setAscendance")
+                    .then(CommandManager.argument("target", EntityArgumentType.player())
+                            .then(CommandManager.argument("state", IntegerArgumentType.integer(0, 1))
+                                    .executes(ctx -> {
+                                        ServerPlayerEntity targetPlayer = EntityArgumentType.getPlayer(ctx, "target");
+                                        boolean newState = IntegerArgumentType.getInteger(ctx, "state") == 1;
+
+                                        Utils.setAscended(targetPlayer, newState);
+
+                                        String message = newState
+                                                ? targetPlayer.getName().getString() + " is now immortal."
+                                                : targetPlayer.getName().getString() + " is now mortal.";
+                                        ctx.getSource().sendFeedback(() -> Text.literal(message), false);
+
+                                        return 1;
+                                    }))));
         });
     }
 }

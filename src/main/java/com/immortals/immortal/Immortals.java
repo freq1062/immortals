@@ -1,5 +1,7 @@
-package com.immortals;
+package com.immortals.immortal;
 
+import com.immortals.Utils;
+import com.immortals.api.PlayerImmortalsData;
 import com.immortals.item.ModItems;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
@@ -17,9 +19,6 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleTypes;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ScoreboardCriterion;
-import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -31,72 +30,12 @@ import net.minecraft.util.ActionResult;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/*Implements the Immortals' corruption system.
-
-Relics of ascension found in ancient city, trial chamber, nether fortress chests
-Shapeless crafting with totem to get totem of ascension
-Right click totem of ascension to become an immortal. Your starting corruption level is based on the number of hearts you have, and the extra hearts are forfeit
-
-<=10 hearts: 0
-11-14 hearts: +1
-14-18 hearts: +2
-18-20 hearts: +3
-
--3: Permanent weakness 1
--2: Permanent slowness 1
--1: -1 max heart, -10% xp gain
-0: A single source of damage cannot do more than 60% of your max health
-+1: Permanent fire resistance, no fall damage, +10% xp gain
-+2: Permanent strength 2, permanent speed 1, dash spell
-+3: Resistance 1 when below 3 hearts, Glow spell, heal 3 hearts on kill
-
-When an immortal kills another player, the victim drops a soul shard which can be used to increase your corruption level and does NOT drop a max heart. The number of soul shards dropped also increases depending on the number of hearts the victim had.
-
-To +1 or below: 1 soul shard to level up
-To +2: 2 soul shards
-To +3: 3 soul shards
-
-<14 max hearts: 1 soul shard
-14-16 max hearts: 2 soul shards
-17-20 max hearts: 3 soul shards
-
-When an immortal dies, their corruption level drops by 1
-When an immortal dies from natural causes, they drop a soul shard
-Soul purifiers: Complex shaped crafting recipe that can increase your corruption level by 1 until base 0.
-/corruption: Shows your current corruption level
-If an immortal goes dies at -3 corruption, they are banned for 48 hours
-Immortal players cannot hold totems of undying.
- */
+/*Implements the Immortals' corruption system.*/
 public class Immortals {
 
 	private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
 
 	public static void register() {
-
-		// Initialize the scoreboard objectives for ascension and corruption
-		ServerTickEvents.START_SERVER_TICK.register((MinecraftServer server) -> {
-			Scoreboard sb = server.getScoreboard();
-			// Ascended: 0 or null = not ascended, 1 = ascended
-			if (sb.getNullableObjective("hasAscended") == null) {
-				sb.addObjective(
-						"hasAscended",
-						ScoreboardCriterion.DUMMY,
-						(Text) Text.literal("Ascended"),
-						ScoreboardCriterion.RenderType.INTEGER,
-						false,
-						null);
-			}
-			// Corruption Level: -3 to +3 or null
-			if (sb.getNullableObjective("corruptionLevel") == null) {
-				sb.addObjective(
-						"corruptionLevel",
-						ScoreboardCriterion.DUMMY,
-						(Text) Text.literal("Corruption"),
-						ScoreboardCriterion.RenderType.INTEGER,
-						false,
-						null);
-			}
-		});
 
 		// Register corruption command
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -114,9 +53,25 @@ public class Immortals {
 					}));
 		});
 
+		ServerPlayerEvents.COPY_FROM.register((oldPlayer, newPlayer, alive) -> {
+			// only copy on death, not when traveling dimensions
+			if (!alive) {
+				PlayerImmortalsData oldData = (PlayerImmortalsData) oldPlayer;
+				PlayerImmortalsData newData = (PlayerImmortalsData) newPlayer;
+
+				// copy ascension & corruption
+				newData.setImmortal(oldData.isImmortal());
+				newData.setCorruption(oldData.getCorruption());
+
+				// copy spell bindings
+				newData.getSpellBindings().clear();
+				newData.getSpellBindings().putAll(oldData.getSpellBindings());
+			}
+		});
+
 		// Send decreased corruption message on respawn
 		ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
-			if (Utils.getAscended(newPlayer)) {
+			if (Utils.getAscended(newPlayer) && Utils.getCorruption(oldPlayer) > -3) {
 				Utils.addCorruption(newPlayer, -1);
 				int lvl = Utils.getCorruption(newPlayer);
 				int next = Utils.nextShardCost(lvl);
@@ -177,8 +132,6 @@ public class Immortals {
 
 			// Ascension Totem: Update objective hasAscended
 			if (stack.getItem() == ModItems.ASCENSION_TOTEM) {
-				Scoreboard sb = player.getWorld().getScoreboard();
-				ScoreboardObjective obj = sb.getNullableObjective("hasAscended");
 
 				if (!Utils.getAscended((ServerPlayerEntity) player)) {
 					// Give starting corruption levels based on hearts
@@ -197,10 +150,10 @@ public class Immortals {
 					}
 
 					Utils.addCorruption((ServerPlayerEntity) player, start_level);
+					Utils.setAscended((ServerPlayerEntity) player, true);
 					player.sendMessage(
 							Text.literal("You feel a surge of divine power! Began at " + start_level + " corruption."),
 							true);
-					sb.getOrCreateScore(player, obj).setScore(1);
 
 					// Play totem animation and particles
 					world.sendEntityStatus(player, (byte) 35); // Totem pop
@@ -234,7 +187,8 @@ public class Immortals {
 					int cost = Utils.nextShardCost(corruption);
 
 					if (stack.getCount() < cost) {
-						player.sendMessage(Text.literal("Require " + cost + " Soul Shards to grow stronger."), true);
+						player.sendMessage(Text.literal("Require " + cost + " Soul Shards to increase corruption."),
+								true);
 						return ActionResult.FAIL;
 					}
 
@@ -243,13 +197,28 @@ public class Immortals {
 					int lvl = Utils.getCorruption((ServerPlayerEntity) player);
 					int next = Utils.nextShardCost(lvl);
 					Utils.applyCorruptionEffects((ServerPlayerEntity) player);
-					player.sendMessage(Text.literal("§5You feel stronger. Corruption: §l" + lvl + "§r. Next: " + next),
+					player.sendMessage(Text.literal("§5You grow stronger. Corruption: §l" + lvl + "§r. Next: " + next),
 							true);
+
+					if (!SpellRegistry.isSpellBound((ServerPlayerEntity) player,
+							SpellRegistry.DASH) && lvl == 2) {
+						player.sendMessage(Text.literal(
+								"§6Learned dash spell! run /bind [slot] dash to rebind it."),
+								false);
+						SpellRegistry.bindDefault((ServerPlayerEntity) player, 0, SpellRegistry.DASH);
+					}
+					if (!SpellRegistry.isSpellBound((ServerPlayerEntity) player,
+							SpellRegistry.GLOW) && lvl == 3) {
+						player.sendMessage(Text.literal(
+								"§6Learned glow spell! run /bind [slot] glow to rebind it."),
+								false);
+						SpellRegistry.bindDefault((ServerPlayerEntity) player, 1, SpellRegistry.GLOW);
+					}
 					return ActionResult.SUCCESS;
 				}
 				// Player has max corruption
 				if (corruption >= 3) {
-					player.sendMessage(Text.literal("Your soul is already at its peak."), true);
+					player.sendMessage(Text.literal("Your soul is at its peak."), true);
 					return ActionResult.FAIL;
 				}
 			}
@@ -262,7 +231,7 @@ public class Immortals {
 					int next = Utils.nextShardCost(lvl);
 					stack.decrement(1);
 					Utils.applyCorruptionEffects((ServerPlayerEntity) player);
-					player.sendMessage(Text.literal("§5You feel stronger. Corruption: §l" + lvl + "§r. Next: " + next),
+					player.sendMessage(Text.literal("§5You feel renewed. Corruption: §l" + lvl + "§r. Next: " + next),
 							true);
 					return ActionResult.SUCCESS;
 				}
@@ -297,12 +266,12 @@ public class Immortals {
 						continue;
 					}
 
-					int orig = orb.getExperienceAmount();
+					int orig = orb.getExperienceAmount(); // Move to config??
 					int bumped = orig;
 					if (Utils.getCorruption((ServerPlayerEntity) picker) >= 1) {
-						bumped = (int) Math.ceil(orig * 1.10);
+						bumped = (int) Math.ceil(orig * 1.25);
 					} else if (Utils.getCorruption((ServerPlayerEntity) picker) <= -1) {
-						bumped = (int) Math.ceil(orig * 0.9);
+						bumped = (int) Math.ceil(orig * 0.75);
 					}
 
 					// Replace the old experience orb with scaled new one
@@ -328,6 +297,13 @@ public class Immortals {
 						ItemStack s = player.getInventory().getStack(i);
 						if (s.getItem() == Items.TOTEM_OF_UNDYING) {
 							player.getInventory().removeStack(i);
+						} else if (s.getItem() == Items.DRAGON_EGG
+								&& !SpellRegistry.isSpellBound((ServerPlayerEntity) player,
+										SpellRegistry.DRAGON_ASCENT)) {
+							player.sendMessage(Text.literal(
+									"§6Dragon Ascent spell unlocked! run /bind [slot] dragon_ascent to rebind it."),
+									false);
+							SpellRegistry.bindDefault((ServerPlayerEntity) player, 2, SpellRegistry.DRAGON_ASCENT);
 						}
 					}
 					// +3 corruption temporary resistance when below 3 hearts
