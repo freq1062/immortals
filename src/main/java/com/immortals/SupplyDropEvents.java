@@ -1,11 +1,13 @@
 package com.immortals;
 
-import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.command.argument.BlockPosArgumentType;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -14,9 +16,12 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.entity.boss.ServerBossBar;
-import net.minecraft.loot.LootTables;
+import net.minecraft.loot.LootTable;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.entity.boss.BossBar;
 import net.minecraft.world.Heightmap;
+import net.minecraft.util.Identifier;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,65 +55,45 @@ public class SupplyDropEvents {
         }
     }
 
+    // Spawns the supply drop chest and broadcasts its location
+    private static int spawnSupplyAt(ServerWorld world, BlockPos pos)
+            throws CommandSyntaxException {
+        world.setBlockState(pos, Blocks.CHEST.getDefaultState());
+        SupplyDropEvents.drops.put(pos, new SupplyDropEvents.SupplyDrop(pos));
+
+        world.getServer().getPlayerManager().broadcast(
+                Text.literal("§6[Supply Drop] Incoming at x=" + pos.getX()
+                        + ", y=" + pos.getY() + ", z=" + pos.getZ() + "!"),
+                false);
+
+        return 1;
+    }
+
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, environment, registryAccess) -> {
             // spawnsupply <x> <y> <z>: Spawns a locked supply drop at the given coordinates
             dispatcher.register(
                     CommandManager.literal("spawnsupply")
-                            .then(CommandManager.argument("x", IntegerArgumentType.integer())
-                                    .then(CommandManager.argument("y", IntegerArgumentType.integer())
-                                            .then(CommandManager.argument("z", IntegerArgumentType.integer())
-                                                    .executes(ctx -> {
-                                                        ServerPlayerEntity p = ctx.getSource().getPlayer();
-                                                        ServerWorld world = (ServerWorld) p.getWorld();
-                                                        int x = IntegerArgumentType.getInteger(ctx, "x");
-                                                        int y = IntegerArgumentType.getInteger(ctx, "y");
-                                                        int z = IntegerArgumentType.getInteger(ctx, "z");
-
-                                                        // Handle relative coordinates (~ ~ ~)
-                                                        BlockPos playerPos = p.getBlockPos();
-                                                        if (ctx.getInput().contains("~")) {
-                                                            x += playerPos.getX();
-                                                            y += playerPos.getY();
-                                                            z += playerPos.getZ();
-                                                        }
-
-                                                        BlockPos pos = new BlockPos(x, y, z);
-                                                        world.setBlockState(pos, Blocks.CHEST.getDefaultState());
-                                                        drops.put(pos, new SupplyDrop(pos));
-                                                        ctx.getSource()
-                                                                .sendFeedback(
-                                                                        () -> Text.literal(
-                                                                                "Spawned locked supply drop at " + pos),
-                                                                        false);
-                                                        world.getServer().getPlayerManager().broadcast(
-                                                                Text.literal(
-                                                                        "§6[Supply Drop] Summoned at x=" + pos.getX() +
-                                                                                ", y=" + pos.getY() + ", z="
-                                                                                + pos.getZ() + "!"),
-                                                                false);
-                                                        return 1;
-                                                    })))
-                                    .executes(ctx -> {
-                                        // Handle case where no coordinates are provided (use player's position)
-                                        ServerPlayerEntity p = ctx.getSource().getPlayer();
-                                        ServerWorld world = (ServerWorld) p.getWorld();
-                                        BlockPos pos = p.getBlockPos();
-                                        world.setBlockState(pos, Blocks.CHEST.getDefaultState());
-                                        drops.put(pos, new SupplyDrop(pos));
-                                        ctx.getSource()
-                                                .sendFeedback(
-                                                        () -> Text.literal(
-                                                                "Spawned locked supply drop at your position " + pos),
+                            // no-arg version: spawns at the player
+                            .executes(ctx -> {
+                                ServerPlayerEntity p = ctx.getSource().getPlayer();
+                                ServerWorld world = (ServerWorld) p.getWorld();
+                                spawnSupplyAt(world, p.getBlockPos());
+                                return 1;
+                            })
+                            // one blockPos argument, supports "~ ~ ~", "^ ^ ^", and absolutes
+                            .then(CommandManager.argument("pos", BlockPosArgumentType.blockPos())
+                                    .executes(
+                                            ctx -> {
+                                                ServerPlayerEntity p = ctx.getSource().getPlayer();
+                                                ServerWorld world = (ServerWorld) p.getWorld();
+                                                BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "pos");
+                                                spawnSupplyAt(world, pos);
+                                                ctx.getSource().sendFeedback(
+                                                        () -> Text.literal("Spawned locked supply drop at " + pos),
                                                         false);
-                                        world.getServer().getPlayerManager().broadcast(
-                                                Text.literal(
-                                                        "§6[Supply Drop] Summoned at x=" + pos.getX() +
-                                                                ", y=" + pos.getY() + ", z="
-                                                                + pos.getZ() + "!"),
-                                                false);
-                                        return 1;
-                                    })));
+                                                return 1;
+                                            })));
             // supplydrop <start|stop>: Defaults to stop on server start
             dispatcher.register(
                     CommandManager.literal("supplydrop")
@@ -159,7 +144,7 @@ public class SupplyDropEvents {
                 // Broadcast the unlocking message
                 world.getServer().getPlayerManager().broadcast(
                         Text.literal("§c" + player.getName().getString() + " is unlocking the supply drop at " +
-                                "**" + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "**!"),
+                                "§l" + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "§r!"),
                         false);
             }
             player.sendMessage(Text.literal("Supply Drop is being unlocked."), true);
@@ -209,12 +194,11 @@ public class SupplyDropEvents {
                     pos = new BlockPos(x, y, z);
                     System.out.println("Found valid at " + pos);
                     // Spawn the supply drop
-                    overworld.setBlockState(pos, Blocks.CHEST.getDefaultState());
-                    drops.put(pos, new SupplyDrop(pos));
-                    server.getPlayerManager().broadcast(
-                            Text.literal("§6[Supply Drop] Incoming at x=" + pos.getX() + ", y=" + pos.getY() + ", z="
-                                    + pos.getZ() + "!"),
-                            false);
+                    try {
+                        spawnSupplyAt(overworld, pos);
+                    } catch (CommandSyntaxException e) {
+                        e.printStackTrace();
+                    }
                 }
                 lastSpawnTime = now;
             }
@@ -234,7 +218,11 @@ public class SupplyDropEvents {
                     overworld.setBlockState(sd.pos, Blocks.CHEST.getDefaultState());
                     if (overworld.getBlockEntity(sd.pos) instanceof ChestBlockEntity chestBE) {
                         // Loot table
-                        chestBE.setLootTable(LootTables.ANCIENT_CITY_CHEST, sd.pos.asLong());
+                        RegistryKey<LootTable> lootTable = RegistryKey.of(
+                                RegistryKeys.LOOT_TABLE,
+                                Identifier.of("immortals", "chests/end_event"));
+                        chestBE.setLootTable(lootTable, sd.pos.asLong());
+                        // chestBE.setLootTable(LootTables.ANCIENT_CITY_CHEST, sd.pos.asLong());
                     }
                     sd.bar.setPercent(1f);
                     sd.bar.setName(Text.literal("Supply Drop Unlocked!"));

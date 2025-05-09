@@ -51,9 +51,7 @@ public class Weapons {
                 long now = System.currentTimeMillis();
                 Long last = PHASE_CHANGE_COOLDOWNS.get(id);
                 if (last != null && now - last < PHASE_CHANGE_COOLDOWN_MS) {
-                    long secsLeft = (PHASE_CHANGE_COOLDOWN_MS - (now - last) + 999) / 1000;
-                    player.sendMessage(Text.literal("§cPhase Change ready in " + secsLeft + "s"), true);
-                    return ActionResult.SUCCESS;
+                    return ActionResult.FAIL;
                 }
 
                 // Compute teleport target

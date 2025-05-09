@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.loot.v3.LootTableEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.EntityType;
@@ -18,6 +19,7 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.loot.LootPool;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
@@ -26,6 +28,8 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
+import net.minecraft.util.Identifier;
+import net.minecraft.loot.entry.ItemEntry;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Immortals {
 
 	private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
+	private static final Identifier ANCIENT_CITY_ID = Identifier.of("minecraft", "chests/ancient_city");
 
 	public static void register() {
 
@@ -122,6 +127,17 @@ public class Immortals {
 			}
 
 		});
+
+		// LootTableEvents.MODIFY.register((id, tableBuilder, source, lookup) -> {
+		// if (id.getValue().equals(Identifier.of("minecraft", "chests/ancient_city"))
+		// ||
+		// id.getValue().equals(Identifier.of("minecraft", "chests/trial_chamber")) ||
+		// id.getValue().equals(Identifier.of("minecraft", "chests/nether_bridge"))) {
+		// LootPool.Builder poolBuilder = LootPool.builder()
+		// .with(ItemEntry.builder(ModItems.ASCENSION_RELIC).weight(10));
+		// tableBuilder.pool(poolBuilder.build());
+		// }
+		// });
 
 		// Custom item events
 		UseItemCallback.EVENT.register((player, world, hand) -> {
