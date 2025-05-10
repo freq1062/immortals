@@ -53,7 +53,7 @@ public class Mortals {
                         mhVic.setBaseValue(6.0); // Restart player at 3 hearts
                         String playerName = victim.getNameForScoreboard();
                         String reason = "You have run out of hearts!";
-                        String command = String.format("tempban %s 24h %s", playerName, reason);
+                        String command = String.format("tempban %s 0 0 24 %s", playerName, reason);
                         MinecraftServer server = victim.getServer();
                         server.getCommandManager().executeWithPrefix(server.getCommandSource(), command);
                     }
@@ -128,8 +128,7 @@ public class Mortals {
                                 double maxHealth = player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
                                         .getBaseValue();
 
-                                if (heartsToWithdraw < 1 || currentHealth - heartsToWithdraw <= 0
-                                        || maxHealth - heartsToWithdraw < 1) {
+                                if (heartsToWithdraw < 1 || maxHealth - (heartsToWithdraw * 2) < 1) {
                                     player.sendMessage(Text.literal("Invalid amount of hearts to withdraw."), false);
                                     return 0;
                                 }
@@ -156,6 +155,11 @@ public class Mortals {
                                     .executes(ctx -> {
                                         ServerPlayerEntity targetPlayer = EntityArgumentType.getPlayer(ctx, "target");
                                         boolean newState = IntegerArgumentType.getInteger(ctx, "state") == 1;
+                                        EntityAttributeInstance maxHearts = targetPlayer
+                                                .getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                                        if (maxHearts.getBaseValue() != 20.0) {
+                                            maxHearts.setBaseValue(20.0);
+                                        }
 
                                         Utils.setAscended(targetPlayer, newState);
 

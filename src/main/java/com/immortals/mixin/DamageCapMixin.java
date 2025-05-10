@@ -16,7 +16,7 @@ public abstract class DamageCapMixin {
         LivingEntity entity = (LivingEntity) (Object) this;
 
         if (!entity.getWorld().isClient() && entity instanceof net.minecraft.server.network.ServerPlayerEntity player) {
-            if (Utils.getAscended(player) && Utils.getCorruption(player) == 0) {
+            if (Utils.getAscended(player)) {
                 float maxAllowed = player.getMaxHealth() * 0.6f;
                 float capped = Math.min(cir.getReturnValue(), maxAllowed);
                 cir.setReturnValue(capped);

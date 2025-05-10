@@ -26,6 +26,7 @@ import net.minecraft.util.Identifier;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Random;
+import java.util.ArrayList;
 
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 
@@ -230,7 +231,7 @@ public class SupplyDropEvents {
                     server.getPlayerManager().broadcast(
                             Text.literal("§aSupply Drop at " + sd.pos + " has been opened!"), false);
                     // Remove bossbar
-                    sd.bar.getPlayers().forEach(sd.bar::removePlayer);
+                    new ArrayList<>(sd.bar.getPlayers()).forEach(sd.bar::removePlayer);
                 }
             }
         });
