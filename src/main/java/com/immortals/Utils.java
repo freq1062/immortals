@@ -137,6 +137,7 @@ public class Utils {
                 true,
                 true);
         if (lightningBolt != null) {
+            lightningBolt.setCosmetic(true); // Mark the lightning as cosmetic to prevent damage
             world.spawnEntity(lightningBolt);
         }
     }

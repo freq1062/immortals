@@ -34,13 +34,14 @@ public class Main implements ModInitializer {
             throw new RuntimeException("Configuration loading failed", e);
         }
 
-        LOGGER.info("Immortals Mod Loaded");
+        LOGGER.info("Immortals S3 Mod Loaded");
 
         ModItems.registerModItems();
         Immortals.register();
         Mortals.register();
         Spell.register();
         Weapons.register();
+        NullSpace.register();
         SupplyDropEvents.register();
     }
 }

@@ -1,0 +1,72 @@
+{
+  "type": "immortals:null_space_type",
+  "generator": {
+    "type": "minecraft:noise",
+    "settings": "minecraft:overworld",
+    "biome_source": {
+      "type": "minecraft:multi_noise",
+      "biomes": [
+        {
+          "biome": "immortals:desert_of_time",
+          "parameters": {
+            "temperature": 0,
+            "humidity": [
+              0,
+              0.5
+            ],
+            "continentalness": [
+              -0.2,
+              0
+            ],
+            "erosion": 0,
+            "depth": 0,
+            "weirdness": [
+              0,
+              0.5
+            ],
+            "offset": 0
+          }
+        },
+        {
+          "biome": "immortals:broken_plains",
+          "parameters": {
+            "temperature": [
+              0,
+              1
+            ],
+            "humidity": [
+              0.5,
+              1
+            ],
+            "continentalness": [
+              0,
+              0.2
+            ],
+            "erosion": 0,
+            "depth": 0,
+            "weirdness": [
+              -0.5,
+              0
+            ],
+            "offset": 0
+          }
+        },
+        {
+          "biome": "minecraft:the_void",
+          "parameters": {
+            "temperature": 0,
+            "humidity": 0,
+            "continentalness": 0,
+            "erosion": 0,
+            "weirdness": [
+              0.9,
+              1
+            ],
+            "depth": 0,
+            "offset": 0
+          }
+        }
+      ]
+    }
+  }
+}
