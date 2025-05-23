@@ -16,7 +16,7 @@
       "sound": "minecraft:ambient.cave",
       "tick_delay": 6000
     },
-    "music_volume": 1,
+    "music": [],
     "sky_color": 10724259,
     "water_color": 5723991,
     "water_fog_color": 4013373,
@@ -24,7 +24,7 @@
       "options": {
         "type": "minecraft:electric_spark"
       },
-      "probability": 0.0001
+      "probability": 0.0002
     }
   },
   "features": [

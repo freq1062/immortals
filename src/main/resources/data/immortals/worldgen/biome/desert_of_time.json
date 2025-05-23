@@ -1,4 +1,5 @@
 {
+  "creature_spawn_probability": 0.5,
   "carvers": [
     "minecraft:cave",
     "minecraft:cave_extra_underground",
@@ -91,32 +92,7 @@
     "axolotls": [],
     "creature": [],
     "misc": [],
-    "monster": [
-      {
-        "type": "minecraft:giant",
-        "maxCount": 1,
-        "minCount": 1,
-        "weight": 5
-      },
-      {
-        "type": "minecraft:illusioner",
-        "weight": 10,
-        "minCount": 1,
-        "maxCount": 1
-      },
-      {
-        "type": "minecraft:rabbit",
-        "weight": 100,
-        "minCount": 1,
-        "maxCount": 1
-      },
-      {
-        "type": "minecraft:zombie_horse",
-        "weight": 15,
-        "minCount": 1,
-        "maxCount": 1
-      }
-    ],
+    "monster": [],
     "underground_water_creature": [],
     "water_ambient": [],
     "water_creature": []
