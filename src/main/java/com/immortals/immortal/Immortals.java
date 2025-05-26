@@ -1,4 +1,4 @@
-package com.immortals.immortal;
+package com.immortals.Immortal;
 
 import com.immortals.Utils;
 import com.immortals.api.PlayerImmortalsData;
@@ -19,6 +19,8 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -36,6 +38,29 @@ public class Immortals {
 	private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
 
 	public static void register() {
+
+		// Initialize the scoreboard objectives for timeslow and dragon_ascent active
+		ServerTickEvents.START_SERVER_TICK.register((MinecraftServer server) -> {
+			Scoreboard sb = server.getScoreboard();
+			if (sb.getNullableObjective("timeslow") == null) {
+				sb.addObjective(
+						"timeslow",
+						ScoreboardCriterion.DUMMY,
+						(Text) Text.literal("t"),
+						ScoreboardCriterion.RenderType.INTEGER,
+						true,
+						null);
+			}
+			if (sb.getNullableObjective("dragon_ascent") == null) {
+				sb.addObjective(
+						"dragon_ascent",
+						ScoreboardCriterion.DUMMY,
+						(Text) Text.literal("d"),
+						ScoreboardCriterion.RenderType.INTEGER,
+						true, // set to true to make it not display (hidden)
+						null);
+			}
+		});
 
 		// Register corruption command
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -304,6 +329,13 @@ public class Immortals {
 									"§6Dragon Ascent spell unlocked! run /bind [slot] dragon_ascent to rebind it."),
 									false);
 							SpellRegistry.bindDefault((ServerPlayerEntity) player, 2, SpellRegistry.DRAGON_ASCENT);
+						} else if (s.getItem() == ModItems.TIMEKEEPER
+								&& !SpellRegistry.isSpellBound((ServerPlayerEntity) player,
+										SpellRegistry.TIMESLOW)) {
+							player.sendMessage(Text.literal(
+									"§6Timeslow unlocked! run /bind [slot] timeslow to rebind it."),
+									false);
+							SpellRegistry.bindDefault((ServerPlayerEntity) player, 3, SpellRegistry.TIMESLOW);
 						}
 					}
 					// +3 corruption temporary resistance when below 3 hearts

@@ -6,10 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
+import com.immortals.Immortal.Immortals;
+import com.immortals.Immortal.Spell;
 import com.immortals.Mortal.Mortals;
 import com.immortals.Mortal.Weapons;
-import com.immortals.immortal.Immortals;
-import com.immortals.immortal.Spell;
 import com.immortals.item.ModItems;
 
 public class Main implements ModInitializer {

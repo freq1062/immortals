@@ -17,6 +17,12 @@ public class ImmortalsConfig {
     public int glowCooldown = 60_000; // 1 minute
     public int dragonAscentCooldown = 45_000; // 45 seconds
     public int dragonAscentRadius = 10; // 10 blocks
+    public int timeSlowDuration = 10_000; // 10 seconds
+    public int timeSlowCooldown = 60_000; // 60 seconds
+    public int timeSlowRadius = 7; // 7 blocks
+    public int overclockCooldown = 45_000; // 45 seconds
+    public int overclockDuration = 20_000; // 20 seconds
+    public int blinkDuration = 5_000; // 5 seconds
     public int phaseChangeCooldown = 20_000; // 20 seconds
 
     // Load or create defaults

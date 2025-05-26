@@ -1,4 +1,4 @@
-package com.immortals.immortal;
+package com.immortals.Immortal;
 
 import java.util.Map;
 import java.util.UUID;

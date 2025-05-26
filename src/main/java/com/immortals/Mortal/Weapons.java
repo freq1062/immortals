@@ -2,7 +2,7 @@ package com.immortals.Mortal;
 
 import com.immortals.Main;
 import com.immortals.Utils;
-import com.immortals.immortal.Spell;
+import com.immortals.Immortal.Spell;
 import com.immortals.item.ModItems;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
@@ -33,7 +33,9 @@ public class Weapons {
     // Track each mortal’s Fractal Edge count
     private static final Map<UUID, Integer> fractalCount = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> PHASE_CHANGE_COOLDOWNS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Long> OVERCLOCK_COOLDOWNS = new ConcurrentHashMap<>();
     private static final long PHASE_CHANGE_COOLDOWN_MS = Main.CONFIG.phaseChangeCooldown;
+    private static final long OVERCLOCK_COOLDOWN_MS = Main.CONFIG.overclockCooldown;
 
     public static void register() {
         UseItemCallback.EVENT.register((player, world, hand) -> {
@@ -44,7 +46,13 @@ public class Weapons {
             if (inHand.getItem() == Items.DRAGON_EGG && Utils.findInInventory(player, ModItems.PHASEBREAKER) == null) {
                 inHand.decrement(1);
                 player.getInventory().offerOrDrop(new ItemStack(ModItems.PHASEBREAKER));
-                player.sendMessage(Text.literal("§aYou have constructed the DRK-07 Phasebreaker!"), true);
+                player.sendMessage(Text.literal("§aYou have constructed the DRK-01 Phasebreaker!"), true);
+                return ActionResult.SUCCESS;
+            } else if (inHand.getItem() == ModItems.TIMEKEEPER
+                    && Utils.findInInventory(player, ModItems.CHRONOREAVER) == null) {
+                inHand.decrement(1);
+                player.getInventory().offerOrDrop(new ItemStack(ModItems.CHRONOREAVER));
+                player.sendMessage(Text.literal("§aYou have constructed the NUL-02 Chronoreaver!"), true);
                 return ActionResult.SUCCESS;
             } else if (inHand.getItem() == ModItems.PHASEBREAKER && player.isSneaking()) {
                 UUID id = player.getUuid();
@@ -98,31 +106,69 @@ public class Weapons {
 
                 // Record cooldown
                 PHASE_CHANGE_COOLDOWNS.put(id, now);
-                player.sendMessage(Text.literal("§aPhase Change!"), true);
+                player.sendMessage(Text.literal("§aPhase Changed!"), true);
                 player.playSound(SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
+
+                return ActionResult.SUCCESS;
+            } else if (inHand.getItem() == ModItems.CHRONOREAVER && player.isSneaking()) {
+                UUID id = player.getUuid();
+                long now = System.currentTimeMillis();
+                Long last = OVERCLOCK_COOLDOWNS.get(id);
+                long cooldown = 45000; // 45 seconds in ms
+                if (last != null && now - last < cooldown) {
+                    return ActionResult.FAIL;
+                }
+                int duration = Main.CONFIG.overclockDuration / 50; // Convert to ticks
+
+                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                        net.minecraft.entity.effect.StatusEffects.SPEED, duration, 2)); // Speed 3 (amplifier is
+                                                                                        // 0-based)
+                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                        net.minecraft.entity.effect.StatusEffects.HASTE, duration, 4)); // Haste 5
+                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                        net.minecraft.entity.effect.StatusEffects.GLOWING, duration, 0));
+
+                // Start cooldown after effects are done
+                Spell.addTask(id, () -> {
+                    OVERCLOCK_COOLDOWNS.put(id, System.currentTimeMillis());
+                    player.sendMessage(Text.literal("§bOverclock cooldown started."), true);
+                }, duration * 50); // duration is in ticks, convert to ms
+
+                player.sendMessage(Text.literal("§bOverclock Activated!"), true);
+                player.playSound(SoundEvents.ITEM_TOTEM_USE, 1f, 1f);
 
                 return ActionResult.SUCCESS;
             }
             return ActionResult.PASS;
         });
 
-        // If a mortal dies with Phasebreaker, it transforms back to a dragon egg
+        // Transform back into special items on death
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
             if (!(entity instanceof ServerPlayerEntity victim) || Utils.getAscended(victim))
                 return true;
 
+            // Don't transform if death was prevented by a totem pop
+            if (victim.getHealth() > 0.0f || victim.isDead()) {
+                // If the player is still alive after the event, it was a totem pop or similar
+                return true;
+            }
+
             // Scan each slot, clear Phasebreaker(s)
             var inv = victim.getInventory();
-            boolean hadOne = false;
+            boolean hadPhasebreaker = false;
+            boolean hadChronoreaver = false;
             for (int i = 0; i < inv.size(); i++) {
                 ItemStack stack = inv.getStack(i);
                 if (stack.getItem() == ModItems.PHASEBREAKER) {
-                    hadOne = true;
+                    hadPhasebreaker = true;
+                    inv.setStack(i, ItemStack.EMPTY);
+                } else if (stack.getItem() == ModItems.CHRONOREAVER) {
+                    hadChronoreaver = true;
                     inv.setStack(i, ItemStack.EMPTY);
                 }
             }
 
-            if (hadOne) {
+            if (hadPhasebreaker) {
                 // Drop dragon egg
                 ServerWorld w = (ServerWorld) victim.getWorld();
                 w.spawnEntity(new ItemEntity(
@@ -131,7 +177,65 @@ public class Weapons {
                         new ItemStack(Items.DRAGON_EGG)));
             }
 
+            if (hadChronoreaver) {
+                // Drop timekeeper
+                ServerWorld w = (ServerWorld) victim.getWorld();
+                w.spawnEntity(new ItemEntity(
+                        w,
+                        victim.getX(), victim.getY(), victim.getZ(),
+                        new ItemStack(ModItems.TIMEKEEPER)));
+            }
+
             return true; // Allow the death to proceed
+        });
+
+        ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, baseDamageTaken, damageTaken, blocked) -> {
+            if (!(entity instanceof ServerPlayerEntity player) || Utils.getAscended(player))
+                return;
+
+            if (Utils.findInInventory(player, ModItems.CHRONOREAVER) == null)
+                return;
+
+            // Only trigger if health just dropped below 5 hearts (10 HP)
+            float newHealth = entity.getHealth();
+            float oldHealth = newHealth + damageTaken;
+            if (oldHealth >= 10.0f && newHealth < 10.0f) {
+                int blinkDuration = Main.CONFIG.blinkDuration / 50; // 100 * 50 = 5 seconds
+
+                // Use scheduled tasks instead of Thread.sleep to avoid freezing the server
+                final int[] blinkCount = { 0 };
+                final boolean[] visible = { true };
+                final UUID playerId = player.getUuid();
+                java.util.Random rand = new java.util.Random();
+
+                while (blinkCount[0] < blinkDuration) {
+                    if (visible[0]) {
+                        System.out.println("Blinking " + blinkCount[0] + visible[0]);
+                        Spell.addTask(playerId, () -> {
+                            EquipmentVisibility.hide(player);
+                            player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                                    net.minecraft.entity.effect.StatusEffects.INVISIBILITY, 100, 0, false, false,
+                                    false));
+                            player.setInvisible(true);
+                        }, blinkCount[0] * 50L);
+                        visible[0] = false;
+                    } else {
+                        Spell.addTask(playerId, () -> {
+                            EquipmentVisibility.show(player);
+                            player.removeStatusEffect(net.minecraft.entity.effect.StatusEffects.INVISIBILITY);
+                            player.setInvisible(false);
+                        }, blinkCount[0] * 50L);
+                        visible[0] = true;
+                    }
+                    blinkCount[0] += 5 + rand.nextInt(15); // 0.25 - 0.75 seconds
+                }
+                // Make sure player is visible at the end
+                Spell.addTask(playerId, () -> {
+                    EquipmentVisibility.show(player);
+                    player.removeStatusEffect(net.minecraft.entity.effect.StatusEffects.INVISIBILITY);
+                    player.setInvisible(false);
+                }, blinkCount[0] * 50L);
+            }
         });
 
         // Fractal Edge ability
@@ -191,7 +295,7 @@ public class Weapons {
             return ActionResult.PASS;
         });
 
-        // Display cooldown messages
+        // Display cooldown messages for Phasebreaker
         ServerTickEvents.START_SERVER_TICK.register(server -> {
             if (server.getTicks() % 20 != 0)
                 return;
@@ -201,9 +305,9 @@ public class Weapons {
                 UUID id = player.getUuid();
                 Long last = PHASE_CHANGE_COOLDOWNS.get(id);
 
-                if (last == null) {
+                // Only show if holding Phasebreaker
+                if (last == null || player.getMainHandStack().getItem() != ModItems.PHASEBREAKER)
                     continue;
-                }
 
                 long elapsed = now - last;
                 long remainingMs = PHASE_CHANGE_COOLDOWN_MS - elapsed;
@@ -219,6 +323,34 @@ public class Weapons {
             }
         });
 
+        // Display cooldown messages for Chronoreaver
+        ServerTickEvents.START_SERVER_TICK.register(server -> {
+            if (server.getTicks() % 20 != 0)
+                return;
+
+            long now = System.currentTimeMillis();
+            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                UUID id = player.getUuid();
+                Long last = OVERCLOCK_COOLDOWNS.get(id);
+
+                // Only show if holding Chronoreaver
+                if (last == null || player.getMainHandStack().getItem() != ModItems.CHRONOREAVER)
+                    continue;
+
+                long elapsed = now - last;
+                long remainingMs = OVERCLOCK_COOLDOWN_MS - elapsed;
+
+                if (remainingMs > 0) {
+                    long secsLeft = (remainingMs + 999) / 1000;
+                    player.sendMessage(Text.literal("§bOverclock: " + secsLeft + "s"), true);
+                } else {
+                    player.sendMessage(Text.literal("§aOverclock ready!"), true);
+                    // Remove entry to prevent further messages
+                    OVERCLOCK_COOLDOWNS.remove(id);
+                }
+            }
+        });
+
         // Check if Phasebreaker's owner has changed and transform it into a dragon egg
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (ServerWorld world : server.getWorlds()) {
@@ -230,7 +362,14 @@ public class Weapons {
                             if (stack.getItem() == ModItems.PHASEBREAKER) {
                                 inv.set(i, new ItemStack(Items.DRAGON_EGG));
                                 player.sendMessage(
-                                        Text.literal("§cPhasebreaker transformed back into a Dragon Egg!"),
+                                        Text.literal("§cPhasebreaker transformed back into the Dragon Egg!"),
+                                        true);
+                                break;
+                            }
+                            if (stack.getItem() == ModItems.CHRONOREAVER) {
+                                inv.set(i, new ItemStack(ModItems.TIMEKEEPER));
+                                player.sendMessage(
+                                        Text.literal("§cChronoreaver transformed back into the Timekeeper!"),
                                         true);
                                 break;
                             }
@@ -239,6 +378,5 @@ public class Weapons {
                 }
             }
         });
-
     }
 }

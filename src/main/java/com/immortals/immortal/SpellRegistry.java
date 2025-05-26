@@ -1,4 +1,4 @@
-package com.immortals.immortal;
+package com.immortals.Immortal;
 
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -6,7 +6,11 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.particle.DustParticleEffect;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.scoreboard.ScoreboardDisplaySlot;
+import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -22,6 +26,7 @@ import com.immortals.api.PlayerImmortalsData;
 
 import net.minecraft.item.Items;
 import net.minecraft.item.ItemStack;
+import com.immortals.item.ModItems;
 
 /**
  * Defines all available spells, their cooldowns, activation logic,
@@ -116,19 +121,19 @@ public enum SpellRegistry {
         public void activate(ServerPlayerEntity player) {
             // Must have dragon egg
             if (!player.getInventory().contains(new ItemStack(Items.DRAGON_EGG))) {
-                player.sendMessage(Text.literal("§cYou need a Dragon Egg to cast this spell."), true);
+                player.sendMessage(Text.literal("§cYou need the Dragon Egg to cast this spell."), true);
                 return;
             }
 
-            // Spawn rune on floor (probably will change later)
-            Vec3d pos = player.getPos().add(0, 0.1, 0);
+            Scoreboard sb = player.getWorld().getScoreboard();
+            ScoreboardObjective obj = sb.getNullableObjective("dragon_ascent");
+            sb.getOrCreateScore(player, obj).setScore(1);
+            // Force client update (this is the only way i could make it work)
+            sb.getOrCreateScore(player, obj).setScore(1);
+            sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
             Spell.addTask(player.getUuid(), () -> {
-                for (int i = 0; i < 100; i++) { // 5 seconds
-                    Spell.addTask(player.getUuid(), () -> {
-                        Utils.drawDragonAscent(pos, player.getWorld());
-                    }, i * 50); // schedule every 50ms
-                }
-            }, 0);
+                sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
+            }, 250);
 
             // Propel player into the air
             player.setVelocity(player.getVelocity().x, 1.3, player.getVelocity().z);
@@ -139,8 +144,7 @@ public enum SpellRegistry {
             double radius = Main.CONFIG.dragonAscentRadius; // detection range
 
             // Target all players and hostile entities within the radius
-            List<LivingEntity> targets = world.getEntitiesByClass(
-                    LivingEntity.class,
+            List<LivingEntity> targets = world.getEntitiesByClass(LivingEntity.class,
                     player.getBoundingBox().expand(radius),
                     e -> (e instanceof ServerPlayerEntity) || (e instanceof HostileEntity));
 
@@ -159,15 +163,122 @@ public enum SpellRegistry {
                 Spell.addTask(player.getUuid(), () -> {
                     t.damage(world, source, 15.0f);
                     Utils.strikeLightning(world, tpos);
-                }, 1000); // 1 second delay
+                }, 1000); // 1
+                          // second
+                          // delay
 
                 Spell.addTask(player.getUuid(), () -> {
                     t.damage(world, source, 15.0f);
                     Utils.strikeLightning(world, tpos);
-                }, 2000); // 2 seconds delay
+                }, 2000); // 2
+                          // seconds
+                          // delay
             }
 
+            Spell.addTask(player.getUuid(), () -> {
+                sb.getOrCreateScore(player, obj).setScore(0);
+                sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
+                Spell.addTask(player.getUuid(), () -> {
+                    sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
+                }, 250);
+            }, Main.CONFIG.dragonAscentCooldown); // 2
+                                                  // seconds
+                                                  // delay
             player.sendMessage(Text.literal("§dThe dragon rune smites your enemies!"), true);
+        }
+    },
+
+    TIMESLOW("timeslow", Main.CONFIG.timeSlowCooldown) {
+        @Override
+        public void activate(ServerPlayerEntity player) {
+
+            // Must have timekeeper
+            if (!player.getInventory().contains(new ItemStack(ModItems.TIMEKEEPER))) {
+                player.sendMessage(Text.literal("§cYou need the Timekeeper to cast this spell."), true);
+                return;
+            }
+            Scoreboard sb = player.getWorld().getScoreboard();
+            ScoreboardObjective obj = sb.getNullableObjective("timeslow");
+            sb.getOrCreateScore(player, obj).setScore(1);
+            sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
+            Spell.addTask(player.getUuid(), () -> {
+                sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
+            }, 250);
+
+            ServerWorld world = (ServerWorld) player.getWorld();
+            Vec3d center = player.getPos();
+            int radius = Main.CONFIG.timeSlowRadius;
+            int duration = Main.CONFIG.timeSlowDuration;
+            int checkInterval = 100; // 2
+                                     // ticks
+                                     // between
+                                     // checks
+
+            Spell.addTask(player.getUuid(), () -> {
+                for (int i = 0; i < 200; i++) { // 10 seconds
+                    final int step = i;
+                    double handAngle = (2 * Math.PI * step) / 200;
+                    Spell.addTask(player.getUuid(), () -> {
+                        Utils.drawTimeslow(center, world, radius, 100, handAngle);
+                    }, step * 50); // schedule every 50ms
+                }
+            }, 0);
+
+            // Track affected entities and their tickrate state
+            Set<UUID> slowedEntities = Collections.synchronizedSet(new HashSet<>());
+
+            // Schedule periodic checks for the duration, and restore after the last check
+            final Vec3d effectCenter = center; // capture the center at cast time
+            int numChecks = duration / checkInterval;
+            for (int i = 0; i <= numChecks; i++) {
+                int t = i * checkInterval;
+                Spell.addTask(player.getUuid(), () -> {
+                    // Find all living entities (including players) within the radius, except
+                    // yourself
+                    List<Entity> inZone = world.getOtherEntities(null,
+                            player.getBoundingBox().expand(radius).offset(effectCenter.subtract(player.getPos())),
+                            e -> e != player && e.squaredDistanceTo(effectCenter) <= radius * radius);
+
+                    // Slow new entities entering the zone
+                    for (Entity entity : inZone) {
+                        if (slowedEntities.add(entity.getUuid())) {
+                            // Set tickrate to 5 using Tickrate mod's command
+                            world.getServer().getCommandManager().executeWithPrefix(
+                                    world.getServer().getCommandSource(),
+                                    String.format("tick entity %s rate 5", entity.getUuid()));
+                        }
+                    }
+
+                    // Restore tickrate for entities that left the zone
+                    slowedEntities.removeIf(uuid -> {
+                        Entity entity = world.getEntity(uuid);
+                        if (entity == null || entity.squaredDistanceTo(effectCenter) > radius * radius) {
+                            // Set tickrate back to 20
+                            world.getServer().getCommandManager().executeWithPrefix(
+                                    world.getServer().getCommandSource(),
+                                    String.format("tick entity %s rate 20", uuid));
+                            return true;
+                        }
+                        return false;
+                    });
+                }, t);
+            }
+
+            // Restore tickrate for any remaining entities after the last check
+            Spell.addTask(player.getUuid(), () -> {
+                sb.getOrCreateScore(player, obj).setScore(0);
+                sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
+                Spell.addTask(player.getUuid(), () -> {
+                    sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
+                }, 250);
+                for (UUID uuid : slowedEntities) {
+                    world.getServer().getCommandManager().executeWithPrefix(world.getServer().getCommandSource(),
+                            String.format("tick entity %s rate 20", uuid));
+                }
+                slowedEntities.clear();
+            }, (numChecks + 1) * checkInterval);
+
+            player.sendMessage(Text.literal("§7Timeslow in effect!"), true);
         }
     };
 
@@ -177,6 +288,13 @@ public enum SpellRegistry {
     private final long cooldownMs;
     /** player UUID -> (Spell -> last use timestamp ms) */
     private static final Map<UUID, Map<SpellRegistry, Long>> LAST_USED = new ConcurrentHashMap<>();
+    // private static final Map<UUID, EnumSet<SpellRegistry>> activeSpells = new
+    // ConcurrentHashMap<>();
+
+    /** Returns true if the given spell is currently active for that player. */
+    public static boolean isActive(ServerPlayerEntity player, SpellRegistry spell) {
+        return System.currentTimeMillis() - getLastUse(player, spell) < spell.getCooldownMs();
+    }
 
     SpellRegistry(String id, long cooldownMs) {
         this.id = id;
@@ -307,6 +425,12 @@ public enum SpellRegistry {
         // Must have a dragon egg to use dragon ascent
         if (!player.getInventory().contains(new ItemStack(Items.DRAGON_EGG)) && spell.id.equals("dragon_ascent")) {
             unbind(player, SpellRegistry.DRAGON_ASCENT);
+            return false;
+        }
+
+        // Must have a timekeeper to use timeslow
+        if (!player.getInventory().contains(new ItemStack(ModItems.TIMEKEEPER)) && spell.id.equals("timeslow")) {
+            unbind(player, SpellRegistry.TIMESLOW);
             return false;
         }
 

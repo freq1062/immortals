@@ -142,6 +142,50 @@ public class Utils {
         }
     }
 
+    public static void drawTimeslow(Vec3d pos, ServerWorld world, int radius, int particles, double handAngle) {
+        // Draw the circle
+        for (int i = 0; i < particles; i++) {
+            double angle = 2 * Math.PI * i / particles;
+            double x = pos.x + radius * Math.cos(angle);
+            double z = pos.z + radius * Math.sin(angle);
+            double y = pos.y + 0.1;
+            world.spawnParticles(ParticleTypes.ELECTRIC_SPARK, x, y, z, 1, 0, 0, 0, 0f);
+        }
+
+        // Draw 8 clock lines (static)
+        int clockLines = 8;
+        double lineLength = radius * 0.9;
+        for (int i = 0; i < clockLines; i++) {
+            double angle = 2 * Math.PI * i / clockLines;
+            double x1 = pos.x + (radius - 0.2) * Math.cos(angle);
+            double z1 = pos.z + (radius - 0.2) * Math.sin(angle);
+            double x2 = pos.x + lineLength * Math.cos(angle);
+            double z2 = pos.z + lineLength * Math.sin(angle);
+            double y = pos.y + 0.1;
+            // Draw a line from x1,z1 to x2,z2 (5 particles)
+            for (int j = 0; j <= 5; j++) {
+                double frac = j / 5.0;
+                double px = x1 + (x2 - x1) * frac;
+                double pz = z1 + (z2 - z1) * frac;
+                world.spawnParticles(ParticleTypes.ELECTRIC_SPARK, px, y, pz, 1, 0, 0, 0, 0f);
+            }
+        }
+
+        // Draw the moving minute hand
+        double hx1 = pos.x;
+        double hz1 = pos.z;
+        double hx2 = pos.x + (radius - 0.3) * Math.cos(handAngle);
+        double hz2 = pos.z + (radius - 0.3) * Math.sin(handAngle);
+        double hy = pos.y + 0.12;
+        // Draw the hand as a line (10 particles, use CRIT for visibility)
+        for (int j = 0; j <= 10; j++) {
+            double frac = j / 10.0;
+            double px = hx1 + (hx2 - hx1) * frac;
+            double pz = hz1 + (hz2 - hz1) * frac;
+            world.spawnParticles(ParticleTypes.GLOW, px, hy, pz, 1, 0, 0, 0, 0f);
+        }
+    }
+
     public static ItemStack findInInventory(PlayerEntity p, Item item) {
         for (ItemStack s : p.getInventory().main) {
             if (s.isOf(item))
