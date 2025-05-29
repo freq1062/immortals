@@ -46,12 +46,18 @@ public class Weapons {
             if (inHand.getItem() == Items.DRAGON_EGG && Utils.findInInventory(player, ModItems.PHASEBREAKER) == null) {
                 inHand.decrement(1);
                 player.getInventory().offerOrDrop(new ItemStack(ModItems.PHASEBREAKER));
+                world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        net.minecraft.sound.SoundEvents.BLOCK_RESPAWN_ANCHOR_DEPLETE,
+                        net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
                 player.sendMessage(Text.literal("§aYou have constructed the DRK-01 Phasebreaker!"), true);
                 return ActionResult.SUCCESS;
             } else if (inHand.getItem() == ModItems.TIMEKEEPER
                     && Utils.findInInventory(player, ModItems.CHRONOREAVER) == null) {
                 inHand.decrement(1);
                 player.getInventory().offerOrDrop(new ItemStack(ModItems.CHRONOREAVER));
+                world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        net.minecraft.sound.SoundEvents.BLOCK_RESPAWN_ANCHOR_DEPLETE,
+                        net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
                 player.sendMessage(Text.literal("§aYou have constructed the NUL-02 Chronoreaver!"), true);
                 return ActionResult.SUCCESS;
             } else if (inHand.getItem() == ModItems.PHASEBREAKER && player.isSneaking()) {
@@ -102,6 +108,12 @@ public class Weapons {
                             player.getYaw(), player.getPitch(),
                             false // Don't reset camera
                     );
+                    world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                            net.minecraft.sound.SoundEvents.ENTITY_ENDER_EYE_DEATH,
+                            net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+                    world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                            net.minecraft.sound.SoundEvents.ENTITY_ENDERMAN_TELEPORT,
+                            net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
                 }
 
                 // Record cooldown
@@ -120,6 +132,9 @@ public class Weapons {
                 }
                 int duration = Main.CONFIG.overclockDuration / 50; // Convert to ticks
 
+                world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        net.minecraft.sound.SoundEvents.ITEM_TRIDENT_THUNDER,
+                        net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
                 player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
                         net.minecraft.entity.effect.StatusEffects.SPEED, duration, 2)); // Speed 3 (amplifier is
                                                                                         // 0-based)
@@ -130,8 +145,11 @@ public class Weapons {
 
                 // Start cooldown after effects are done
                 Spell.addTask(id, () -> {
+                    world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                            net.minecraft.sound.SoundEvents.BLOCK_BEACON_DEACTIVATE,
+                            net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
                     OVERCLOCK_COOLDOWNS.put(id, System.currentTimeMillis());
-                    player.sendMessage(Text.literal("§bOverclock cooldown started."), true);
+                    player.sendMessage(Text.literal("§bOverclock Recharging!"), true);
                 }, duration * 50); // duration is in ticks, convert to ms
 
                 player.sendMessage(Text.literal("§bOverclock Activated!"), true);
@@ -283,7 +301,9 @@ public class Weapons {
                                             ParticleTypes.SWEEP_ATTACK,
                                             particlePos.x, particlePos.y + ent.getHeight() * 0.5, particlePos.z,
                                             3, 0.5, 0.5, 0.5, 0.0);
-                                    ent.playSound(SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 1.0F, 1.0F);
+                                    world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                                            net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP,
+                                            net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
                                 }, j * (500 / 3));
                             }
 
@@ -373,6 +393,19 @@ public class Weapons {
                                         true);
                                 break;
                             }
+                        }
+                        // Also check offhand
+                        ItemStack offhand = player.getOffHandStack();
+                        if (offhand.getItem() == ModItems.PHASEBREAKER) {
+                            player.setStackInHand(net.minecraft.util.Hand.OFF_HAND, new ItemStack(Items.DRAGON_EGG));
+                            player.sendMessage(
+                                    Text.literal("§cPhasebreaker transformed back into the Dragon Egg!"),
+                                    true);
+                        } else if (offhand.getItem() == ModItems.CHRONOREAVER) {
+                            player.setStackInHand(net.minecraft.util.Hand.OFF_HAND, new ItemStack(ModItems.TIMEKEEPER));
+                            player.sendMessage(
+                                    Text.literal("§cChronoreaver transformed back into the Timekeeper!"),
+                                    true);
                         }
                     }
                 }

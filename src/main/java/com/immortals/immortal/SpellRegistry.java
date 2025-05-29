@@ -6,9 +6,6 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.particle.DustParticleEffect;
 import net.minecraft.particle.ParticleTypes;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ScoreboardDisplaySlot;
-import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.damage.DamageSource;
@@ -45,6 +42,13 @@ public enum SpellRegistry {
             ServerWorld world = (ServerWorld) player.getWorld();
             int rings = 3;
             int particlesPerRing = 20;
+
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    net.minecraft.sound.SoundEvents.ENTITY_WITHER_SHOOT,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 0.5F, 1.2F);
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    net.minecraft.sound.SoundEvents.UI_TOAST_IN,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
 
             for (int i = 0; i < rings; i++) {
                 double ringRadius = 0.5 + i * 0.4; // each ring gets larger
@@ -112,6 +116,9 @@ public enum SpellRegistry {
                 }, 0);
             }
 
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    net.minecraft.sound.SoundEvents.BLOCK_BELL_RESONATE,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 0.8F);
             player.sendMessage(Text.literal("§eYou glow, revealing nearby players!"), true);
         }
     },
@@ -125,15 +132,15 @@ public enum SpellRegistry {
                 return;
             }
 
-            Scoreboard sb = player.getWorld().getScoreboard();
-            ScoreboardObjective obj = sb.getNullableObjective("dragon_ascent");
-            sb.getOrCreateScore(player, obj).setScore(1);
-            // Force client update (this is the only way i could make it work)
-            sb.getOrCreateScore(player, obj).setScore(1);
-            sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
+            Utils.updateRune(player, "dragon_ascent", 1);
+
             Spell.addTask(player.getUuid(), () -> {
-                sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
-            }, 250);
+                for (int i = 0; i < 100; i++) { // 5 seconds
+                    Spell.addTask(player.getUuid(), () -> {
+                        Utils.drawDragonAscent(player.getPos(), player.getWorld());
+                    }, i * 50); // schedule every 50ms
+                }
+            }, 0);
 
             // Propel player into the air
             player.setVelocity(player.getVelocity().x, 1.3, player.getVelocity().z);
@@ -142,6 +149,9 @@ public enum SpellRegistry {
 
             ServerWorld world = (ServerWorld) player.getWorld();
             double radius = Main.CONFIG.dragonAscentRadius; // detection range
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    net.minecraft.sound.SoundEvents.ENTITY_ENDER_DRAGON_AMBIENT,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 0.5F, 1.0F);
 
             // Target all players and hostile entities within the radius
             List<LivingEntity> targets = world.getEntitiesByClass(LivingEntity.class,
@@ -161,14 +171,14 @@ public enum SpellRegistry {
                 Vec3d tpos = t.getPos().add(0, t.getStandingEyeHeight() * 0.5, 0);
                 DamageSource source = world.getDamageSources().create(DamageTypes.MAGIC);
                 Spell.addTask(player.getUuid(), () -> {
-                    t.damage(world, source, 15.0f);
+                    t.damage(world, source, 8.0f);
                     Utils.strikeLightning(world, tpos);
                 }, 1000); // 1
                           // second
                           // delay
 
                 Spell.addTask(player.getUuid(), () -> {
-                    t.damage(world, source, 15.0f);
+                    t.damage(world, source, 8.0f);
                     Utils.strikeLightning(world, tpos);
                 }, 2000); // 2
                           // seconds
@@ -176,11 +186,7 @@ public enum SpellRegistry {
             }
 
             Spell.addTask(player.getUuid(), () -> {
-                sb.getOrCreateScore(player, obj).setScore(0);
-                sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
-                Spell.addTask(player.getUuid(), () -> {
-                    sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
-                }, 250);
+                Utils.updateRune(player, "dragon_ascent", 0);
             }, Main.CONFIG.dragonAscentCooldown); // 2
                                                   // seconds
                                                   // delay
@@ -197,13 +203,7 @@ public enum SpellRegistry {
                 player.sendMessage(Text.literal("§cYou need the Timekeeper to cast this spell."), true);
                 return;
             }
-            Scoreboard sb = player.getWorld().getScoreboard();
-            ScoreboardObjective obj = sb.getNullableObjective("timeslow");
-            sb.getOrCreateScore(player, obj).setScore(1);
-            sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
-            Spell.addTask(player.getUuid(), () -> {
-                sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
-            }, 250);
+            Utils.updateRune(player, "timeslow", 1);
 
             ServerWorld world = (ServerWorld) player.getWorld();
             Vec3d center = player.getPos();
@@ -214,6 +214,10 @@ public enum SpellRegistry {
                                      // between
                                      // checks
 
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    net.minecraft.sound.SoundEvents.BLOCK_BEACON_ACTIVATE,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 0.5F);
+
             Spell.addTask(player.getUuid(), () -> {
                 for (int i = 0; i < 200; i++) { // 10 seconds
                     final int step = i;
@@ -223,6 +227,23 @@ public enum SpellRegistry {
                     }, step * 50); // schedule every 50ms
                 }
             }, 0);
+
+            // Play beacon ambient sound for the duration of the spell
+            Spell.addTask(player.getUuid(), () -> {
+                world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        net.minecraft.sound.SoundEvents.BLOCK_BEACON_AMBIENT,
+                        net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+            }, 0);
+
+            // Repeat ambient sound every 80 ticks (4 seconds) for the spell duration
+            int ambientRepeat = 80 * 50; // 80 ticks * 50ms per tick = 4000ms
+            for (int i = ambientRepeat; i < duration; i += ambientRepeat) {
+                Spell.addTask(player.getUuid(), () -> {
+                    world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                            net.minecraft.sound.SoundEvents.BLOCK_BEACON_AMBIENT,
+                            net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+                }, i);
+            }
 
             // Track affected entities and their tickrate state
             Set<UUID> slowedEntities = Collections.synchronizedSet(new HashSet<>());
@@ -266,11 +287,11 @@ public enum SpellRegistry {
 
             // Restore tickrate for any remaining entities after the last check
             Spell.addTask(player.getUuid(), () -> {
-                sb.getOrCreateScore(player, obj).setScore(0);
-                sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
-                Spell.addTask(player.getUuid(), () -> {
-                    sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
-                }, 250);
+
+                world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        net.minecraft.sound.SoundEvents.BLOCK_BEACON_DEACTIVATE,
+                        net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 0.5F);
+                Utils.updateRune(player, "timeslow", 0);
                 for (UUID uuid : slowedEntities) {
                     world.getServer().getCommandManager().executeWithPrefix(world.getServer().getCommandSource(),
                             String.format("tick entity %s rate 20", uuid));
@@ -415,6 +436,11 @@ public enum SpellRegistry {
         int corr = Utils.getCorruption(player);
         SpellRegistry spell = getBound(player, slot);
 
+        if (spell == null) {
+            player.sendMessage(Text.literal("No spell bound to slot " + (slot + 1)), true);
+            return false;
+        }
+
         // Level requirements
         if (spell == DASH && corr < 2) {
             return false;
@@ -431,11 +457,6 @@ public enum SpellRegistry {
         // Must have a timekeeper to use timeslow
         if (!player.getInventory().contains(new ItemStack(ModItems.TIMEKEEPER)) && spell.id.equals("timeslow")) {
             unbind(player, SpellRegistry.TIMESLOW);
-            return false;
-        }
-
-        if (spell == null) {
-            player.sendMessage(Text.literal("No spell bound to slot " + (slot + 1)), true);
             return false;
         }
 

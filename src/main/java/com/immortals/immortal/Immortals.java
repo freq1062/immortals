@@ -18,7 +18,6 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.particle.ParticleTypes;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.server.MinecraftServer;
@@ -39,7 +38,8 @@ public class Immortals {
 
 	public static void register() {
 
-		// Initialize the scoreboard objectives for timeslow and dragon_ascent active
+		// Initialize the scoreboard objectives for timeslow, immortal and dragon_ascent
+		// active
 		ServerTickEvents.START_SERVER_TICK.register((MinecraftServer server) -> {
 			Scoreboard sb = server.getScoreboard();
 			if (sb.getNullableObjective("timeslow") == null) {
@@ -57,7 +57,16 @@ public class Immortals {
 						ScoreboardCriterion.DUMMY,
 						(Text) Text.literal("d"),
 						ScoreboardCriterion.RenderType.INTEGER,
-						true, // set to true to make it not display (hidden)
+						true,
+						null);
+			}
+			if (sb.getNullableObjective("immortal") == null) {
+				sb.addObjective(
+						"immortal",
+						ScoreboardCriterion.DUMMY,
+						(Text) Text.literal("i"),
+						ScoreboardCriterion.RenderType.INTEGER,
+						true,
 						null);
 			}
 		});
@@ -182,13 +191,13 @@ public class Immortals {
 
 					// Play totem animation and particles
 					world.sendEntityStatus(player, (byte) 35); // Totem pop
-					if (world instanceof ServerWorld serverWorld) {
-						serverWorld.spawnParticles(ParticleTypes.SMOKE, player.getX(), player.getY() + 1, player.getZ(),
-								50, 0.5, 0.5, 0.5, 0.01);
-						serverWorld.spawnParticles(ParticleTypes.DRAGON_BREATH, player.getX(), player.getY() + 1,
-								player.getZ(), 20, 0.5, 0.5, 0.5, 0.01);
-					}
+					// Render rune
+					Utils.updateRune(player, "immortal", 1);
+					Utils.drawImmortalEvent(player.getPos(), world);
 					player.playSound(SoundEvents.ENTITY_WITHER_SPAWN, 1.0F, 1.0F);
+					Spell.addTask(player.getUuid(), () -> {
+						Utils.updateRune(player, "immortal", 0);
+					}, 1500);
 
 					stack.decrement(1);
 					return ActionResult.SUCCESS;
@@ -227,6 +236,9 @@ public class Immortals {
 
 					if (!SpellRegistry.isSpellBound((ServerPlayerEntity) player,
 							SpellRegistry.DASH) && lvl == 2) {
+						world.playSound(null, player.getX(), player.getY(), player.getZ(),
+								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
+								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
 						player.sendMessage(Text.literal(
 								"§6Learned dash spell! run /bind [slot] dash to rebind it."),
 								false);
@@ -234,6 +246,9 @@ public class Immortals {
 					}
 					if (!SpellRegistry.isSpellBound((ServerPlayerEntity) player,
 							SpellRegistry.GLOW) && lvl == 3) {
+						world.playSound(null, player.getX(), player.getY(), player.getZ(),
+								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
+								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
 						player.sendMessage(Text.literal(
 								"§6Learned glow spell! run /bind [slot] glow to rebind it."),
 								false);

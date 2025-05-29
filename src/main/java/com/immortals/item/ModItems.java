@@ -14,33 +14,80 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.Rarity;
 import com.immortals.Main;
 
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.LoreComponent;
+
 import java.util.function.Function;
 
 public class ModItems {
         public static final Item ASCENSION_TOTEM = registerItem("ascension_totem", Item::new,
                         new Item.Settings()
                                         .rarity(Rarity.EPIC)
-                                        .maxCount(1));
+                                        .component(DataComponentTypes.LORE,
+                                                        new LoreComponent(
+                                                                        java.util.List.of(
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "§4Some say that the First Immortal lives on in this item."),
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "§4Once you ascend, you will never be able to return to your mortal life."))))
+                                        .maxCount(1)
+                                        .fireproof());
 
         public static final Item ASCENSION_RELIC = registerItem("ascension_relic", Item::new,
                         new Item.Settings()
+                                        .component(DataComponentTypes.LORE,
+                                                        new LoreComponent(
+                                                                        java.util.List.of(
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "§4These relics were manifested from the intense fear of death."))))
                                         .rarity(Rarity.RARE));
 
-        public static final Item SOUL_PURIFIER = registerItem("soul_purifier", Item::new, new Item.Settings());
-        public static final Item SOUL_SHARD = registerItem("soul_shard", Item::new, new Item.Settings());
-        public static final Item HEART = registerItem("heart", Item::new, new Item.Settings());
+        public static final Item SOUL_PURIFIER = registerItem("soul_purifier", Item::new,
+                        new Item.Settings()
+                                        .component(DataComponentTypes.LORE,
+                                                        new LoreComponent(
+                                                                        java.util.List.of(
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "The soul purifier can return your soul to its original state.")))));
+        public static final Item SOUL_SHARD = registerItem("soul_shard", Item::new, new Item.Settings()
+                        .component(DataComponentTypes.LORE,
+                                        new LoreComponent(
+                                                        java.util.List.of(
+                                                                        net.minecraft.text.Text.literal(
+                                                                                        "§4A shard of the victim's soul, corrupted by Immortal power.")))));
+        public static final Item HEART = registerItem("heart", Item::new, new Item.Settings()
+                        .component(DataComponentTypes.LORE,
+                                        new LoreComponent(
+                                                        java.util.List.of(
+                                                                        net.minecraft.text.Text.literal(
+                                                                                        "§cA piece of mortal essence.")))));
 
-        public static final Item PHASEBREAKER = registerItem("phasebreaker",
+        public static final Item PHASEBREAKER = registerItem(
+                        "phasebreaker",
                         settings -> new SwordItem(
                                         ToolMaterial.NETHERITE,
-                                        8 - 5, // same attack as netherite sword, idk why this specifically but it works
+                                        8 - 5, // same attack as netherite sword
                                         -2.4F,
                                         settings),
                         new Item.Settings()
                                         .rarity(Rarity.EPIC)
-                                        .enchantable(15)); // Enchantable with enchantability of 15
+                                        .component(
+                                                        DataComponentTypes.LORE,
+                                                        new LoreComponent(
+                                                                        java.util.List.of(
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "§dForged from space folded into itself, the blade can cut through reality."),
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "§aFRACTAL EDGE: Every 7 hits, the sword induces a flurry of hits on the target."),
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "§aPHASE CHANGE: Shift + right click to teleport in the direction you are facing."
+                                                                                                                        + (Main.CONFIG.phaseChangeCooldown
+                                                                                                                                        / 1000)
+                                                                                                                        + " seconds cooldown."))))
+                                        .enchantable(15));
 
-        public static final Item CHRONOREAVER = registerItem("chronoreaver",
+        public static final Item CHRONOREAVER = registerItem(
+                        "chronoreaver",
                         settings -> new AxeItem(
                                         ToolMaterial.DIAMOND,
                                         5.0F, // Diamond Axe equivalents
@@ -49,11 +96,44 @@ public class ModItems {
                         },
                         new Item.Settings()
                                         .rarity(Rarity.EPIC)
-                                        .enchantable(15)); // Enchantable with enchantability of 15
+                                        .component(
+                                                        DataComponentTypes.LORE,
+                                                        new LoreComponent(
+                                                                        java.util.List.of(
+                                                                                        net.minecraft.text.Text
+                                                                                                        .literal(
+                                                                                                                        "§eCrafted in the Null Space where time collapses,"),
+                                                                                        net.minecraft.text.Text
+                                                                                                        .literal(
+                                                                                                                        "§eEach strike lands before it is swung."),
+                                                                                        net.minecraft.text.Text
+                                                                                                        .literal(
+                                                                                                                        "§aOVERCLOCK: Shift + right click to apply haste 5 and speed 3 for "
+                                                                                                                                        + (Main.CONFIG.overclockDuration
+                                                                                                                                                        / 1000)
+                                                                                                                                        + " seconds."),
+                                                                                        net.minecraft.text.Text
+                                                                                                        .literal("§a" +
+                                                                                                                        (Main.CONFIG.overclockCooldown
+                                                                                                                                        / 1000)
+                                                                                                                        + " second cooldown."),
+                                                                                        net.minecraft.text.Text
+                                                                                                        .literal(
+                                                                                                                        "§aBLINK: When below 50% health, the axe applies true invisibility for "
+                                                                                                                                        + (Main.CONFIG.blinkDuration
+                                                                                                                                                        / 1000)
+                                                                                                                                        + " seconds."))))
+                                        .enchantable(15));
+        // of 15
 
         public static final Item TIMEKEEPER = registerItem("timekeeper", Item::new,
                         new Item.Settings()
                                         .rarity(Rarity.EPIC)
+                                        .component(DataComponentTypes.LORE,
+                                                        new LoreComponent(
+                                                                        java.util.List.of(
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "§eThe timekeeper runs, maintaining the flow of time in the universe."))))
                                         .maxCount(1));
 
         public static Item registerItem(String name, Function<Item.Settings, Item> factory, Item.Settings settings) {

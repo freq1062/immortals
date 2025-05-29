@@ -20,8 +20,6 @@ public class EquipmentVisibility {
             empty.add(new Pair<>(slot, ItemStack.EMPTY));
         }
         EntityEquipmentUpdateS2CPacket pkt = new EntityEquipmentUpdateS2CPacket(target.getId(), empty);
-        // EntityEquipmentUpdateS2CPacket(target.getId(), empty);
-
         // send to everyone except the target
         target.getServer()
                 .getPlayerManager()

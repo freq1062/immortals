@@ -14,8 +14,12 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.scoreboard.ScoreboardDisplaySlot;
+import net.minecraft.scoreboard.ScoreboardObjective;
 
 import com.immortals.api.PlayerImmortalsData;
+import com.immortals.Immortal.Spell;
 
 import net.minecraft.entity.EntityType;
 
@@ -87,41 +91,36 @@ public class Utils {
 
     // Draws the dragon ascent rune circle at pos
     public static void drawDragonAscent(Vec3d pos, World world) {
+        if (!(world instanceof ServerWorld serverWorld))
+            return;
         double y = pos.y;
-        // Circle
-        int circlePts = 256; // Increase points for smoother circle
-        double circleR = 5.0;
-        for (int i = 0; i < circlePts; i++) {
-            double ang = 2 * Math.PI * i / circlePts;
-            double x = pos.x + Math.cos(ang) * circleR;
-            double z = pos.z + Math.sin(ang) * circleR;
-            if (world instanceof ServerWorld serverWorld) {
-                serverWorld.spawnParticles(ParticleTypes.PORTAL, x, y, z, 1, 0, 0, 0, 0); // Set motion to 0 to prevent
-                                                                                          // falling
-            }
+        int particleCount = 100; // Number of particles to spawn
+        double radius = 30.0;
+        for (int i = 0; i < particleCount; i++) {
+            double angle = Math.random() * 2 * Math.PI;
+            double dist = Math.sqrt(Math.random()) * radius; // Uniform distribution in circle
+            double x = pos.x + Math.cos(angle) * dist;
+            double z = pos.z + Math.sin(angle) * dist;
+            double py = y + (Math.random() - 0.5) * 2; // Small vertical variation
+            serverWorld.spawnParticles(ParticleTypes.PORTAL, x, py, z, 1, 0, 0, 0, 0);
         }
+    }
 
-        // Rotated squares
-        double[] sqR = { 5.0, 4.0, 3.0 };
-        double baseRotation = 30;
-        for (int i = 0; i < sqR.length; i++) {
-            double r = sqR[i];
-            double rot = baseRotation + i * 45; // 0°, 45°, 90° etc.
-            Vec3d[] corners = new Vec3d[4];
-            for (int c = 0; c < 4; c++) {
-                double ang = Math.toRadians(rot + 45 + 90 * c);
-                corners[c] = pos.add(Math.cos(ang) * r, 0, Math.sin(ang) * r);
-            }
-            int steps = 40; // Number of steps for line interpolation
-            for (int c = 0; c < 4; c++) {
-                Vec3d a = corners[c], b = corners[(c + 1) % 4];
-                for (int s = 0; s <= steps; s++) {
-                    double t = s / (double) steps;
-                    Vec3d pt = a.lerp(b, t);
-                    if (world instanceof ServerWorld serverWorld) {
-                        serverWorld.spawnParticles(ParticleTypes.PORTAL, pt.x, y, pt.z, 1, 0, 0, 0, 0);
-                    }
-                }
+    public static void drawImmortalEvent(Vec3d pos, World world) {
+        if (!(world instanceof ServerWorld serverWorld))
+            return;
+        double y = pos.y;
+        double radius = 2.0;
+        double height = 3.0;
+        int rings = 8;
+        int particlesPerRing = 32;
+        for (int i = 0; i < rings; i++) {
+            double ringY = y + (i * height / (rings - 1));
+            for (int j = 0; j < particlesPerRing; j++) {
+                double angle = 2 * Math.PI * j / particlesPerRing;
+                double x = pos.x + radius * Math.cos(angle);
+                double z = pos.z + radius * Math.sin(angle);
+                serverWorld.spawnParticles(ParticleTypes.CRIMSON_SPORE, x, ringY, z, 1, 0, 0, 0, 0);
             }
         }
     }
@@ -192,5 +191,15 @@ public class Utils {
                 return s;
         }
         return null;
+    }
+
+    public static void updateRune(PlayerEntity player, String runeName, int value) {
+        Scoreboard sb = player.getWorld().getScoreboard();
+        ScoreboardObjective obj = sb.getNullableObjective(runeName);
+        sb.getOrCreateScore(player, obj).setScore(value);
+        sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
+        Spell.addTask(player.getUuid(), () -> {
+            sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
+        }, 250);
     }
 }

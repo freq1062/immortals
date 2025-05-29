@@ -89,7 +89,12 @@ public class Spell {
                                         SpellRegistry spell = SpellRegistry.fromId(spellId);
 
                                         if (spell == null) {
-                                            player.sendMessage(Text.literal("Unknown spell: " + spellId), false);
+                                            player.sendMessage(Text.literal("§cUnknown spell: " + spellId), false);
+                                            return 0;
+                                        }
+                                        if (!Utils.getAscended(player)) {
+                                            player.sendMessage(Text.literal("§cYou must be ascended to bind spells!"),
+                                                    true);
                                             return 0;
                                         }
 

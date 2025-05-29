@@ -27,13 +27,25 @@ import net.minecraft.util.math.RotationAxis;
 import com.mojang.blaze3d.systems.RenderSystem;
 
 public class ImmortalsClient implements ClientModInitializer {
-  private static final Identifier TIMESLOW_TEX = Identifier.of("immortals", "textures/runecircles/timeslow.png");
-  private static final Identifier DRAGONASCENT_TEX = Identifier.of("immortals",
-      "textures/runecircles/dragon_ascent.png");
+  private static final float MAX_RUNE_SIZE = 14.0f; // Diameter in blocks
+  private static final float ANIMATION_SPEED = 0.2f; // Size units per tick
 
-  // Stores active spells for each player UUID, with their rune position and spell
-  // set
+  // Stores active spells with animation state:
+  // [0]=PlayerEntity, [1]=X, [2]=Y, [3]=Z, [4]=Texture,
+  // [5]=Current Size, [6]=Animation State (0=growing, 1=stable, 2=shrinking)
   private static final Map<java.util.AbstractMap.SimpleEntry<UUID, String>, Object[]> activeSpells = new ConcurrentHashMap<>();
+
+  // Helper to get scoreboard score or -1 if not present
+  int getScore(Scoreboard sb, PlayerEntity player, String objectiveName) {
+    ScoreboardObjective obj = sb.getNullableObjective(objectiveName);
+    if (obj != null) {
+      var scoreObj = sb.getScore(player, obj);
+      if (scoreObj != null) {
+        return scoreObj.getScore();
+      }
+    }
+    return -1;
+  }
 
   @Override
   public void onInitializeClient() {
@@ -42,83 +54,84 @@ public class ImmortalsClient implements ClientModInitializer {
       if (client.world == null)
         return;
 
-      // Store player UUID and their rune position if scoreboard is 1
+      // Define spell types and their textures
+      Map<String, Identifier> spellTextures = Map.of(
+          "timeslow", Identifier.of("immortals", "textures/runecircles/timeslow.png"),
+          "dragon_ascent", Identifier.of("immortals",
+              "textures/runecircles/dragon_ascent.png"),
+          "immortal", Identifier.of("immortals",
+              "textures/runecircles/immortal.png"));
+
       for (PlayerEntity clientPlayer : client.world.getPlayers()) {
         Scoreboard sb = clientPlayer.getWorld().getScoreboard();
-        ScoreboardObjective timeSlowObjective = sb.getNullableObjective("timeslow");
-        int timeSlowScore = -1;
-        if (timeSlowObjective != null) {
-          var scoreObj = sb.getScore(clientPlayer, timeSlowObjective);
-          if (scoreObj != null) {
-            timeSlowScore = scoreObj.getScore();
-          }
-        }
-        ScoreboardObjective dragonAscentObj = sb.getNullableObjective("dragon_ascent");
-        int dragonAscentScore = -1;
-        if (dragonAscentObj != null) {
-          var scoreObj = sb.getScore(clientPlayer, dragonAscentObj);
-          if (scoreObj != null) {
-            dragonAscentScore = scoreObj.getScore();
-          }
-        }
         UUID uuid = clientPlayer.getUuid();
 
-        if (timeSlowScore == 1) {
-          String spellType = "timeslow";
-          Map.Entry<SimpleEntry<UUID, String>, Object[]> existingEntry = activeSpells.entrySet()
-              .stream()
-              .filter(e -> e.getKey().getKey().equals(uuid) && e.getKey().getValue().equals(spellType))
-              .findFirst().orElse(null);
+        for (Map.Entry<String, Identifier> spell : spellTextures.entrySet()) {
+          String spellType = spell.getKey();
+          Identifier texture = spell.getValue();
+          int score = getScore(sb, clientPlayer, spellType);
 
-          if (existingEntry == null) {
-            activeSpells.put(new SimpleEntry<>(uuid, spellType), new Object[] {
-                clientPlayer,
-                clientPlayer.getX(),
-                clientPlayer.getBoundingBox().minY + 0.01,
-                clientPlayer.getZ(),
-                TIMESLOW_TEX
-            });
-          }
-        } else if (timeSlowScore == 0) {
-          // Remove if not active
-          activeSpells.entrySet()
-              .removeIf(e -> e.getKey().getKey().equals(uuid) && e.getKey().getValue().equals("timeslow"));
-        }
-        if (dragonAscentScore == 1) {
-          String spellType = "dragon_ascent";
-          Map.Entry<SimpleEntry<UUID, String>, Object[]> existingEntry = activeSpells.entrySet()
-              .stream()
-              .filter(e -> e.getKey().getKey().equals(uuid) && e.getKey().getValue().equals(spellType))
-              .findFirst().orElse(null);
+          SimpleEntry<UUID, String> key = new SimpleEntry<>(uuid, spellType);
 
-          if (existingEntry == null) {
-            activeSpells.put(new SimpleEntry<>(uuid, spellType), new Object[] {
-                clientPlayer,
-                clientPlayer.getX(),
-                clientPlayer.getBoundingBox().minY + 0.01,
-                clientPlayer.getZ(),
-                DRAGONASCENT_TEX
-            });
+          if (score == 1) {
+            if (!activeSpells.containsKey(key)) {
+              activeSpells.put(key, new Object[] {
+                  clientPlayer,
+                  clientPlayer.getX(),
+                  clientPlayer.getBoundingBox().minY + 0.01,
+                  clientPlayer.getZ(),
+                  texture,
+                  0.0f, // Starting size
+                  0 // Growing state
+              });
+            }
+          } else if (score == 0) {
+            if (activeSpells.containsKey(key) && ((int) activeSpells.get(key)[6]) != 2) {
+              activeSpells.get(key)[6] = 2; // Set to shrinking state
+            }
           }
-        } else if (dragonAscentScore == 0) {
-          // Remove if not active
-          activeSpells.entrySet()
-              .removeIf(e -> e.getKey().getKey().equals(uuid) && e.getKey().getValue().equals("dragon_ascent"));
         }
       }
 
-      // Render runes at stored positions for all active players
-      for (Object[] entry : activeSpells.values()) {
-        double px = (double) entry[1];
-        double py = (double) entry[2];
-        double pz = (double) entry[3];
-        Identifier texture = (Identifier) entry[4];
-        renderRune(context, texture, px, py, pz);
-      }
+      // Update animations and render runes
+      activeSpells.entrySet().removeIf(entry -> {
+        Object[] spellData = entry.getValue();
+        float size = (float) spellData[5];
+        int animState = (int) spellData[6];
+
+        // Update size based on animation state
+        if (animState == 0) { // Growing
+          size = Math.min(size + ANIMATION_SPEED, MAX_RUNE_SIZE);
+          if (size >= MAX_RUNE_SIZE) {
+            animState = 1; // Set to stable
+          }
+          spellData[5] = size;
+          spellData[6] = animState;
+        } else if (animState == 2) { // Shrinking
+          size = Math.max(size - ANIMATION_SPEED, 0.0f);
+          spellData[5] = size;
+
+          // Remove if completely shrunk
+          if (size <= 0.0f) {
+            return true; // Remove from map
+          }
+        }
+
+        // Render the rune if it has size
+        if (size > 0) {
+          double px = (double) spellData[1];
+          double py = (double) spellData[2];
+          double pz = (double) spellData[3];
+          Identifier texture = (Identifier) spellData[4];
+          renderRune(context, texture, px, py, pz, size);
+        }
+
+        return false; // Keep in map
+      });
     });
   }
 
-  private void renderRune(WorldRenderContext context, Identifier texture, double px, double py, double pz) {
+  private void renderRune(WorldRenderContext context, Identifier texture, double px, double py, double pz, float size) {
     ClientWorld world = context.world();
     Camera camera = context.camera();
     Vec3d camPos = camera.getPos();
@@ -127,36 +140,31 @@ public class ImmortalsClient implements ClientModInitializer {
     if (world == null || consumers == null)
       return;
 
-    // Fixed position in the world (0, 80, 0)
     float camX = (float) camPos.x, camY = (float) camPos.y, camZ = (float) camPos.z;
 
-    // Translate to the fixed position relative to camera
     matrices.push();
     matrices.translate((float) (px - camX), (float) (py - camY), (float) (pz - camZ));
 
-    // Apply rotation
     long time = System.currentTimeMillis();
-    float rotation = (float) ((time / 20.0) % 360.0); // Rotate smoothly and continuously
+    float rotation = (float) ((time / 20.0) % 360.0);
     matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotation));
 
-    // Set up texture and rendering
     RenderSystem.setShaderTexture(0, texture);
-    RenderSystem.disableCull(); // Allow seeing the quad from both sides
-    VertexConsumer vc = consumers.getBuffer(
-        RenderLayer.getEntityCutoutNoCull(texture));
+    RenderSystem.disableCull();
+    VertexConsumer vc = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(texture));
 
-    // Render a horizontal quad (3x3 blocks)
-    renderQuad(matrices, vc, 1.0f, 1.0f, 1.0f, 1.0f);
+    // Use the current animated size
+    renderQuad(matrices, vc, 1.0f, 1.0f, 1.0f, 1.0f, size);
 
     RenderSystem.enableCull();
     matrices.pop();
   }
 
-  private void renderQuad(MatrixStack matrices, VertexConsumer vc, float r, float g, float b, float a) {
+  private void renderQuad(MatrixStack matrices, VertexConsumer vc, float r, float g, float b, float a, float size) {
     MatrixStack.Entry entry = matrices.peek();
     Matrix4f modelMat = entry.getPositionMatrix();
 
-    float halfSize = 7.0f; // 7x7 blocks
+    float halfSize = size / 2; // Use the current animation size
 
     // Bottom-left
     vc.vertex(modelMat, -halfSize, 0, -halfSize).color(r, g, b, a).texture(0, 1)
