@@ -10,6 +10,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import com.immortals.Utils;
+import com.immortals.item.ModItems;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 
@@ -150,6 +151,7 @@ public class Spell {
                             case DASH -> corr >= 2;
                             case GLOW -> corr >= 3;
                             case DRAGON_ASCENT -> player.getInventory().contains(new ItemStack(Items.DRAGON_EGG));
+                            case TIMESLOW -> player.getInventory().contains(new ItemStack(ModItems.TIMEKEEPER));
                             // Only show if player has the dragon egg
                             default -> false; // future spells get gated here
                         };

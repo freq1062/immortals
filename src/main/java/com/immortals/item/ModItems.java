@@ -80,7 +80,7 @@ public class ModItems {
                                                                                         net.minecraft.text.Text.literal(
                                                                                                         "§aFRACTAL EDGE: Every 7 hits, the sword induces a flurry of hits on the target."),
                                                                                         net.minecraft.text.Text.literal(
-                                                                                                        "§aPHASE CHANGE: Shift + right click to teleport in the direction you are facing."
+                                                                                                        "§aPHASE CHANGE: Shift + right click to teleport in the direction you are facing. ok so "
                                                                                                                         + (Main.CONFIG.phaseChangeCooldown
                                                                                                                                         / 1000)
                                                                                                                         + " seconds cooldown."))))

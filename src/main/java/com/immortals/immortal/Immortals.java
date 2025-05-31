@@ -3,6 +3,7 @@ package com.immortals.Immortal;
 import com.immortals.Utils;
 import com.immortals.api.PlayerImmortalsData;
 import com.immortals.item.ModItems;
+import com.immortals.Main;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
@@ -109,7 +110,6 @@ public class Immortals {
 				Utils.addCorruption(newPlayer, -1);
 				int lvl = Utils.getCorruption(newPlayer);
 				int next = Utils.nextShardCost(lvl);
-				Utils.applyCorruptionEffects(newPlayer);
 				newPlayer.sendMessage(
 						Text.literal("§5You feel weakened. Corruption: §l" + lvl + "§r. Next: " + next),
 						true);
@@ -230,27 +230,24 @@ public class Immortals {
 					Utils.addCorruption((ServerPlayerEntity) player, 1);
 					int lvl = Utils.getCorruption((ServerPlayerEntity) player);
 					int next = Utils.nextShardCost(lvl);
-					Utils.applyCorruptionEffects((ServerPlayerEntity) player);
 					player.sendMessage(Text.literal("§5You grow stronger. Corruption: §l" + lvl + "§r. Next: " + next),
 							true);
 
-					if (!SpellRegistry.isSpellBound((ServerPlayerEntity) player,
-							SpellRegistry.DASH) && lvl == 2) {
+					if (lvl == 2) {
 						world.playSound(null, player.getX(), player.getY(), player.getZ(),
 								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
 								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
 						player.sendMessage(Text.literal(
-								"§6Learned dash spell! run /bind [slot] dash to rebind it."),
+								"§6Unlocked dash spell! run /bind [slot] dash to rebind it."),
 								false);
 						SpellRegistry.bindDefault((ServerPlayerEntity) player, 0, SpellRegistry.DASH);
 					}
-					if (!SpellRegistry.isSpellBound((ServerPlayerEntity) player,
-							SpellRegistry.GLOW) && lvl == 3) {
+					if (lvl == 3) {
 						world.playSound(null, player.getX(), player.getY(), player.getZ(),
 								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
 								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
 						player.sendMessage(Text.literal(
-								"§6Learned glow spell! run /bind [slot] glow to rebind it."),
+								"§6Unlocked glow spell! run /bind [slot] glow to rebind it."),
 								false);
 						SpellRegistry.bindDefault((ServerPlayerEntity) player, 1, SpellRegistry.GLOW);
 					}
@@ -270,7 +267,6 @@ public class Immortals {
 					int lvl = Utils.getCorruption((ServerPlayerEntity) player);
 					int next = Utils.nextShardCost(lvl);
 					stack.decrement(1);
-					Utils.applyCorruptionEffects((ServerPlayerEntity) player);
 					player.sendMessage(Text.literal("§5You feel renewed. Corruption: §l" + lvl + "§r. Next: " + next),
 							true);
 					return ActionResult.SUCCESS;
@@ -306,12 +302,12 @@ public class Immortals {
 						continue;
 					}
 
-					int orig = orb.getExperienceAmount(); // Move to config??
+					int orig = orb.getExperienceAmount();
 					int bumped = orig;
 					if (Utils.getCorruption((ServerPlayerEntity) picker) >= 1) {
-						bumped = (int) Math.ceil(orig * 1.25);
+						bumped = (int) Math.ceil(orig + orig * Main.CONFIG.immortalXpMultiplier);
 					} else if (Utils.getCorruption((ServerPlayerEntity) picker) <= -1) {
-						bumped = (int) Math.ceil(orig * 0.75);
+						bumped = (int) Math.ceil(orig + orig * Main.CONFIG.immortalXpMultiplier);
 					}
 
 					// Replace the old experience orb with scaled new one
@@ -332,6 +328,10 @@ public class Immortals {
 
 			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 				if (Utils.getAscended(player)) {
+					// Apply passive corruption effects
+					if (server.getTicks() % 40 == 0) {
+						Utils.applyCorruptionEffects(player);
+					}
 					// Remove normal totems if ascended
 					for (int i = 0; i < player.getInventory().size(); i++) {
 						ItemStack s = player.getInventory().getStack(i);
@@ -348,7 +348,7 @@ public class Immortals {
 								&& !SpellRegistry.isSpellBound((ServerPlayerEntity) player,
 										SpellRegistry.TIMESLOW)) {
 							player.sendMessage(Text.literal(
-									"§6Timeslow unlocked! run /bind [slot] timeslow to rebind it."),
+									"§6Timeslow spell unlocked! run /bind [slot] timeslow to rebind it."),
 									false);
 							SpellRegistry.bindDefault((ServerPlayerEntity) player, 3, SpellRegistry.TIMESLOW);
 						}
@@ -356,11 +356,11 @@ public class Immortals {
 					// +3 corruption temporary resistance when below 3 hearts
 					if (Utils.getCorruption(player) >= 3 &&
 							player.getHealth() < 6.0f && !player.hasStatusEffect(StatusEffects.RESISTANCE)) {
-						player.sendMessage(Text.literal("§aYour will strengthens... (+Resistance I)"), true);
+						player.sendMessage(Text.literal("§aYour will strengthens... (+Resistance II)"), true);
 						player.addStatusEffect(new StatusEffectInstance(
 								StatusEffects.RESISTANCE,
 								40, // lasts 2 seconds, refreshed each tick
-								0,
+								1,
 								false, false));
 					}
 				}

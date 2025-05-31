@@ -64,6 +64,8 @@ public class Utils {
         player.clearStatusEffects();
         player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0); // Reset to 10 hearts
 
+        int duration = 40; // 2 seconds (40 ticks)
+
         if (level <= -1) {
             // -1: -1 heart, -10% XP gain (XP handled elsewhere)
             player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(18.0);
@@ -72,20 +74,20 @@ public class Utils {
         if (level <= -2) {
             // -2: Slowness I
             player.addStatusEffect(
-                    new StatusEffectInstance(StatusEffects.SLOWNESS, Integer.MAX_VALUE, 0, false, false));
+                    new StatusEffectInstance(StatusEffects.SLOWNESS, duration, 0, false, false));
         }
 
         if (level <= -3) {
             // -3: Weakness I
             player.addStatusEffect(
-                    new StatusEffectInstance(StatusEffects.WEAKNESS, Integer.MAX_VALUE, 0, false, false));
+                    new StatusEffectInstance(StatusEffects.WEAKNESS, duration, 0, false, false));
         }
 
         if (level >= 2) {
             // +2: Speed II, Strength II
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, Integer.MAX_VALUE, 1, false, false));
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, duration, 1, false, false));
             player.addStatusEffect(
-                    new StatusEffectInstance(StatusEffects.STRENGTH, Integer.MAX_VALUE, 1, false, false));
+                    new StatusEffectInstance(StatusEffects.STRENGTH, duration, 1, false, false));
         }
     }
 

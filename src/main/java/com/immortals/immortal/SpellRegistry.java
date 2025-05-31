@@ -184,12 +184,9 @@ public enum SpellRegistry {
                           // seconds
                           // delay
             }
-
             Spell.addTask(player.getUuid(), () -> {
                 Utils.updateRune(player, "dragon_ascent", 0);
-            }, Main.CONFIG.dragonAscentCooldown); // 2
-                                                  // seconds
-                                                  // delay
+            }, 3000);
             player.sendMessage(Text.literal("§dThe dragon rune smites your enemies!"), true);
         }
     },

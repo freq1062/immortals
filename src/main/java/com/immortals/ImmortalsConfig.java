@@ -24,6 +24,7 @@ public class ImmortalsConfig {
     public int overclockDuration = 20_000; // 20 seconds
     public int blinkDuration = 5_000; // 5 seconds
     public int phaseChangeCooldown = 20_000; // 20 seconds
+    public double immortalXpMultiplier = 0.25; // 25% More/Less XP for Immortals
 
     // Load or create defaults
     public static ImmortalsConfig load() throws IOException {
