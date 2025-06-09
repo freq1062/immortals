@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:augmentation_core"
+    },
+    "title": "Mortals",
+    "description": "Strength lies in Technology.",
+    "background": "immortals:textures/gui/advancements/backgrounds/mortal_bg.png",
+    "show_toast": false,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "tick": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "requirements": [
+    ["tick"]
+  ]
+}

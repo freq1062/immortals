@@ -5,7 +5,7 @@
       "conditions": {
         "items": [
           {
-            "items": "immortals:ascension_relic",
+            "items": "immortals:heart",
             "count": 1
           }
         ]
@@ -14,7 +14,7 @@
   },
   "rewards": {
     "recipes": [
-      "immortals:soul_purifier"
+      "immortals:augmentation_core"
     ]
   },
   "requirements": [

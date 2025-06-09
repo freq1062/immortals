@@ -427,7 +427,7 @@
             "name": "minecraft:silence_armor_trim_smithing_template"
           }
         ],
-        "rolls": 1
+        "rolls": 2
       }
     ],
     "random_sequence": "minecraft:chests/ancient_city"

@@ -34,8 +34,8 @@ public class Weapons {
     private static final Map<UUID, Integer> fractalCount = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> PHASE_CHANGE_COOLDOWNS = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> OVERCLOCK_COOLDOWNS = new ConcurrentHashMap<>();
-    private static final long PHASE_CHANGE_COOLDOWN_MS = Main.CONFIG.phaseChangeCooldown;
-    private static final long OVERCLOCK_COOLDOWN_MS = Main.CONFIG.overclockCooldown;
+    private static final long PHASE_CHANGE_COOLDOWN_MS = (Integer) Main.CONFIG.get("phaseChangeCooldown");
+    private static final long OVERCLOCK_COOLDOWN_MS = (Integer) Main.CONFIG.get("overclockCooldown");
 
     public static void register() {
         UseItemCallback.EVENT.register((player, world, hand) -> {
@@ -49,6 +49,7 @@ public class Weapons {
                 world.playSound(null, player.getX(), player.getY(), player.getZ(),
                         net.minecraft.sound.SoundEvents.BLOCK_RESPAWN_ANCHOR_DEPLETE,
                         net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+                Utils.grant((ServerPlayerEntity) player, "master_of_space");
                 player.sendMessage(Text.literal("§aYou have constructed the DRK-01 Phasebreaker!"), true);
                 return ActionResult.SUCCESS;
             } else if (inHand.getItem() == ModItems.TIMEKEEPER
@@ -58,6 +59,7 @@ public class Weapons {
                 world.playSound(null, player.getX(), player.getY(), player.getZ(),
                         net.minecraft.sound.SoundEvents.BLOCK_RESPAWN_ANCHOR_DEPLETE,
                         net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+                Utils.grant((ServerPlayerEntity) player, "master_of_time");
                 player.sendMessage(Text.literal("§aYou have constructed the NUL-02 Chronoreaver!"), true);
                 return ActionResult.SUCCESS;
             } else if (inHand.getItem() == ModItems.PHASEBREAKER && player.isSneaking()) {
@@ -130,7 +132,7 @@ public class Weapons {
                 if (last != null && now - last < cooldown) {
                     return ActionResult.FAIL;
                 }
-                int duration = Main.CONFIG.overclockDuration / 50; // Convert to ticks
+                int duration = (Integer) Main.CONFIG.get("overclockDuration") / 50; // Convert to ticks
 
                 world.playSound(null, player.getX(), player.getY(), player.getZ(),
                         net.minecraft.sound.SoundEvents.ITEM_TRIDENT_THUNDER,
@@ -218,7 +220,7 @@ public class Weapons {
             float newHealth = entity.getHealth();
             float oldHealth = newHealth + damageTaken;
             if (oldHealth >= 10.0f && newHealth < 10.0f) {
-                int blinkDuration = Main.CONFIG.blinkDuration / 50; // 100 * 50 = 5 seconds
+                int blinkDuration = (Integer) Main.CONFIG.get("blinkDuration") / 50; // 100 * 50 = 5 seconds
 
                 // Use scheduled tasks instead of Thread.sleep to avoid freezing the server
                 final int[] blinkCount = { 0 };

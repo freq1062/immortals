@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:timekeeper"
+    },
+    "title": "Timekeeper",
+    "description": "Harness the power of time to slow down the world around you.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:immortals",
+  "criteria": {
+    "timeslow": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["timeslow"]
+  ]
+}

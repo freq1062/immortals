@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "minecraft:dragon_egg"
+    },
+    "title": "Dragon Tamer",
+    "description": "Harness the power of the dragon egg to smite your foes.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:immortals",
+  "criteria": {
+    "dragon_ascent": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["dragon_ascent"]
+  ]
+}

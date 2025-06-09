@@ -8,17 +8,18 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.server.MinecraftServer;
@@ -30,14 +31,90 @@ import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 /*Implements the Immortals' corruption system.*/
 public class Immortals {
 
 	private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
+	private static final Map<UUID, Integer> splinterCount = new ConcurrentHashMap<>();
 
 	public static void register() {
+		// AttackEntityCallback for Splinter Blow
+		AttackEntityCallback.EVENT.register((player, world, hand, target, hitResult) -> {
+			if (world.isClient || !(player instanceof ServerPlayerEntity sp) || !Utils.getAscended(sp))
+				return ActionResult.PASS;
+			ServerWorld serverWorld = (ServerWorld) world;
+
+			// Only increment if it's a fully charged attack
+			if (sp.getAttackCooldownProgress(0.5F) < 0.84F) {
+				return ActionResult.PASS;
+			}
+
+			UUID id = sp.getUuid();
+			int count = splinterCount.getOrDefault(id, 0) + 1;
+			splinterCount.put(id, count);
+
+			if (count >= 3) {
+				SpellRegistry.tryActivate(sp, SpellRegistry.getSlot(sp, SpellRegistry.SPLINTER_BLOW));
+				if (target instanceof ServerPlayerEntity targetPlayer) {
+					// Deal 2 hearts (4.0f) of magic damage
+					DamageSource ds = serverWorld.getDamageSources().magic();
+					targetPlayer.damage(serverWorld, ds, 6.0f);
+
+					// Spawn an X of critical particles in front of the player
+					double yaw = Math.toRadians(sp.getYaw());
+					double pitch = Math.toRadians(sp.getPitch());
+					double x = sp.getX() - Math.sin(yaw) * Math.cos(pitch) * 1.5;
+					double y = sp.getY() + sp.getStandingEyeHeight() - Math.sin(pitch) * 1.0;
+					double z = sp.getZ() + Math.cos(yaw) * Math.cos(pitch) * 1.5;
+
+					world.playSound(null, player.getX(), player.getY(), player.getZ(),
+							net.minecraft.sound.SoundEvents.ITEM_WOLF_ARMOR_CRACK,
+							net.minecraft.sound.SoundCategory.PLAYERS, 0.7f, 1.0f);
+
+					// X shape: two crossing lines
+					for (int i = -5; i <= 5; i++) {
+						double t = i * 0.1;
+						// First line
+						serverWorld.spawnParticles(
+								ParticleTypes.CRIT,
+								x + t, y + t, z + t,
+								1, 0, 0, 0, 0);
+						// Second line
+						serverWorld.spawnParticles(
+								ParticleTypes.CRIT,
+								x + t, y - t, z + t,
+								1, 0, 0, 0, 0);
+						double offset = 0.5; // distance to push the X shape forward
+						double forwardX = x - Math.sin(yaw) * Math.cos(pitch) * offset;
+						double forwardY = y - Math.sin(pitch) * offset;
+						double forwardZ = z + Math.cos(yaw) * Math.cos(pitch) * offset;
+
+						serverWorld.spawnParticles(
+								ParticleTypes.ENCHANTED_HIT,
+								forwardX + t, forwardY + t, forwardZ + t,
+								1, 0, 0, 0, 0);
+						// Second line
+						serverWorld.spawnParticles(
+								ParticleTypes.ENCHANTED_HIT,
+								forwardX + t, forwardY - t, forwardZ + t,
+								1, 0, 0, 0, 0);
+					}
+				}
+				splinterCount.put(id, 0);
+			}
+			return ActionResult.PASS;
+		});
+
+		// Reset splinterCount on player being hit
+		ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, amount, taken, blocked) -> {
+			if (entity instanceof ServerPlayerEntity sp) {
+				splinterCount.put(sp.getUuid(), 0);
+			}
+		});
 
 		// Initialize the scoreboard objectives for timeslow, immortal and dragon_ascent
 		// active
@@ -89,6 +166,7 @@ public class Immortals {
 		});
 
 		ServerPlayerEvents.COPY_FROM.register((oldPlayer, newPlayer, alive) -> {
+
 			// only copy on death, not when traveling dimensions
 			if (!alive) {
 				PlayerImmortalsData oldData = (PlayerImmortalsData) oldPlayer;
@@ -101,6 +179,22 @@ public class Immortals {
 				// copy spell bindings
 				newData.getSpellBindings().clear();
 				newData.getSpellBindings().putAll(oldData.getSpellBindings());
+
+				int corruption = newData.getCorruption();
+				if (corruption == 1) {
+					newData.getSpellBindings().clear();
+				} else if (corruption == 2) {
+					// Only keep dash and splinter_blow
+					newData.getSpellBindings().entrySet()
+							.removeIf(e -> !e.getValue().equals("dash") && !e.getValue().equals("splinter_blow"));
+				} else if (corruption == 3) {
+					// Only keep dash, splinter_blow, glow, and backdraft
+					newData.getSpellBindings().entrySet()
+							.removeIf(e -> !e.getValue().equals("dash")
+									&& !e.getValue().equals("splinter_blow")
+									&& !e.getValue().equals("glow")
+									&& !e.getValue().equals("backdraft"));
+				}
 			}
 		});
 
@@ -109,6 +203,10 @@ public class Immortals {
 			if (Utils.getAscended(newPlayer) && Utils.getCorruption(oldPlayer) > -3) {
 				Utils.addCorruption(newPlayer, -1);
 				int lvl = Utils.getCorruption(newPlayer);
+				if (lvl <= -1) {
+					// -1: -1 heart, -10% XP gain (XP handled elsewhere)
+					newPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(18.0);
+				}
 				int next = Utils.nextShardCost(lvl);
 				newPlayer.sendMessage(
 						Text.literal("§5You feel weakened. Corruption: §l" + lvl + "§r. Next: " + next),
@@ -183,8 +281,10 @@ public class Immortals {
 						start_level = 3;
 					}
 
-					Utils.addCorruption((ServerPlayerEntity) player, start_level);
+					Utils.setCorruption((ServerPlayerEntity) player, start_level);
 					Utils.setAscended((ServerPlayerEntity) player, true);
+					// Reset health
+					player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0);
 					player.sendMessage(
 							Text.literal("You feel a surge of divine power! Began at " + start_level + " corruption."),
 							true);
@@ -200,6 +300,7 @@ public class Immortals {
 					}, 1500);
 
 					stack.decrement(1);
+					Utils.grant((ServerPlayerEntity) player, "an_immortal");
 					return ActionResult.SUCCESS;
 				} else {
 					player.sendMessage(Text.literal("You have already ascended. There is no going back!"), true);
@@ -233,23 +334,78 @@ public class Immortals {
 					player.sendMessage(Text.literal("§5You grow stronger. Corruption: §l" + lvl + "§r. Next: " + next),
 							true);
 
+					if (lvl == 1) {
+						world.playSound(null, player.getX(), player.getY(), player.getZ(),
+								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
+								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+						player.sendMessage(
+								Text.literal("§6Unlocked ")
+										.append(
+												Text.literal("§cDash")
+														.styled(style -> style.withHoverEvent(
+																new net.minecraft.text.HoverEvent(
+																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
+																		Text.literal(
+																				"Propels you 10 blocks horizontally.\nCooldown 15s.\nRun /bind [slot] dash to use.")))))
+										.append(Text.literal("§6 and "))
+										.append(
+												Text.literal("§cSpliter Blow")
+														.styled(style -> style.withHoverEvent(
+																new net.minecraft.text.HoverEvent(
+																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
+																		Text.literal(
+																				"Deal 2 extra hearts of damage after a 3-hit combo. \nRun /bind [slot] splinter_blow to use.")))))
+										.append(Text.literal("§6! Hover to see details.")),
+								false);
+					}
 					if (lvl == 2) {
 						world.playSound(null, player.getX(), player.getY(), player.getZ(),
 								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
 								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-						player.sendMessage(Text.literal(
-								"§6Unlocked dash spell! run /bind [slot] dash to rebind it."),
+						player.sendMessage(
+								Text.literal("§6Unlocked ")
+										.append(
+												Text.literal("§cGlow")
+														.styled(style -> style.withHoverEvent(
+																new net.minecraft.text.HoverEvent(
+																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
+																		Text.literal(
+																				"Make all players within 30 blocks glow for 5 seconds.\nCooldown 45s.\nRun /bind [slot] glow to use.")))))
+										.append(Text.literal("§6 and "))
+										.append(
+												Text.literal("§cBackdraft")
+														.styled(style -> style.withHoverEvent(
+																new net.minecraft.text.HoverEvent(
+																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
+																		Text.literal(
+																				"Knock and ignite players while propeling yourself 5 blocks backwards.\nRun /bind [slot] backdraft to use.")))))
+										.append(Text.literal("§6! Hover to see details.")),
 								false);
-						SpellRegistry.bindDefault((ServerPlayerEntity) player, 0, SpellRegistry.DASH);
 					}
 					if (lvl == 3) {
 						world.playSound(null, player.getX(), player.getY(), player.getZ(),
 								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
 								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-						player.sendMessage(Text.literal(
-								"§6Unlocked glow spell! run /bind [slot] glow to rebind it."),
+						Utils.grant((ServerPlayerEntity) player, "the_immortal");
+						player.sendMessage(
+								Text.literal("§6Unlocked ")
+										.append(
+												Text.literal("§cPersist")
+														.styled(style -> style.withHoverEvent(
+																new net.minecraft.text.HoverEvent(
+																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
+																		Text.literal(
+																				"Resistance II for 5s and 3 absorption hearts when below 3 hearts, automatic activation. Cooldown 30s. \nRun /bind [slot] persist to use.")))))
+										.append(Text.literal("§6 and "))
+										.append(
+												Text.literal("§cBlackout")
+														.styled(style -> style.withHoverEvent(
+																new net.minecraft.text.HoverEvent(
+																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
+																		Text.literal(
+																				"Apply blindness to non-teammates and invisibility to everybody in a 10 block radius for 7 seconds.\nCooldown 45s.\nRun /bind [slot] blackout to use.")))))
+										.append(Text.literal("§6! Hover to see details.")),
 								false);
-						SpellRegistry.bindDefault((ServerPlayerEntity) player, 1, SpellRegistry.GLOW);
 					}
 					return ActionResult.SUCCESS;
 				}
@@ -305,9 +461,9 @@ public class Immortals {
 					int orig = orb.getExperienceAmount();
 					int bumped = orig;
 					if (Utils.getCorruption((ServerPlayerEntity) picker) >= 1) {
-						bumped = (int) Math.ceil(orig + orig * Main.CONFIG.immortalXpMultiplier);
+						bumped = (int) Math.ceil(orig + orig * ((Double) Main.CONFIG.get("immortalXpMultiplier")));
 					} else if (Utils.getCorruption((ServerPlayerEntity) picker) <= -1) {
-						bumped = (int) Math.ceil(orig + orig * Main.CONFIG.immortalXpMultiplier);
+						bumped = (int) Math.ceil(orig - orig * ((Double) Main.CONFIG.get("immortalXpMultiplier")));
 					}
 
 					// Replace the old experience orb with scaled new one
@@ -327,6 +483,15 @@ public class Immortals {
 			}
 
 			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+				for (int i = 0; i < player.getInventory().size(); i++) {
+					ItemStack s = player.getInventory().getStack(i);
+					if (s.getItem() == Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE) {
+						player.getInventory().removeStack(i);
+						player.sendMessage(Text.literal(
+								"You accidentally dropped the Netherite Upgrade Template. (Netherite Upgrades Removed)"),
+								false);
+					}
+				}
 				if (Utils.getAscended(player)) {
 					// Apply passive corruption effects
 					if (server.getTicks() % 40 == 0) {
@@ -337,31 +502,30 @@ public class Immortals {
 						ItemStack s = player.getInventory().getStack(i);
 						if (s.getItem() == Items.TOTEM_OF_UNDYING) {
 							player.getInventory().removeStack(i);
+							player.sendMessage(Text.literal(
+									"§cWhat, you're not immortal enough? (Totems Removed)"),
+									false);
 						} else if (s.getItem() == Items.DRAGON_EGG
 								&& !SpellRegistry.isSpellBound((ServerPlayerEntity) player,
 										SpellRegistry.DRAGON_ASCENT)) {
-							player.sendMessage(Text.literal(
-									"§6Dragon Ascent spell unlocked! run /bind [slot] dragon_ascent to rebind it."),
-									false);
-							SpellRegistry.bindDefault((ServerPlayerEntity) player, 2, SpellRegistry.DRAGON_ASCENT);
+							Utils.grant(player, "dragon_ascent");
+							SpellRegistry.bindDefault(player, 0, SpellRegistry.DRAGON_ASCENT);
 						} else if (s.getItem() == ModItems.TIMEKEEPER
 								&& !SpellRegistry.isSpellBound((ServerPlayerEntity) player,
 										SpellRegistry.TIMESLOW)) {
+							Utils.grant(player, "timeslow");
+							SpellRegistry.bindDefault(player, 6, SpellRegistry.TIMESLOW);
+						} else if (s.getItem() == ModItems.AUGMENTATION_CORE) {
+							player.getInventory().removeStack(i);
 							player.sendMessage(Text.literal(
-									"§6Timeslow spell unlocked! run /bind [slot] timeslow to rebind it."),
+									"§cThe Augmentation Core shattered into pieces. (Augmentation cores removed)"),
 									false);
-							SpellRegistry.bindDefault((ServerPlayerEntity) player, 3, SpellRegistry.TIMESLOW);
 						}
 					}
-					// +3 corruption temporary resistance when below 3 hearts
+					// Activate Persist passive ability
 					if (Utils.getCorruption(player) >= 3 &&
-							player.getHealth() < 6.0f && !player.hasStatusEffect(StatusEffects.RESISTANCE)) {
-						player.sendMessage(Text.literal("§aYour will strengthens... (+Resistance II)"), true);
-						player.addStatusEffect(new StatusEffectInstance(
-								StatusEffects.RESISTANCE,
-								40, // lasts 2 seconds, refreshed each tick
-								1,
-								false, false));
+							player.getHealth() < 6.0f) {
+						SpellRegistry.tryActivate(player, SpellRegistry.getSlot(player, SpellRegistry.PERSIST));
 					}
 				}
 			}

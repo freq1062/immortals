@@ -61,6 +61,14 @@ public class ModItems {
                                                         java.util.List.of(
                                                                         net.minecraft.text.Text.literal(
                                                                                         "§cA piece of mortal essence.")))));
+        public static final Item AUGMENTATION_CORE = registerItem("augmentation_core", Item::new, new Item.Settings()
+                        .component(DataComponentTypes.LORE,
+                                        new LoreComponent(
+                                                        java.util.List.of(
+                                                                        net.minecraft.text.Text.literal(
+                                                                                        "To compete with magical powers, Mortal ingenuity discovered how to augment the attributes of various items."),
+                                                                        net.minecraft.text.Text.literal(
+                                                                                        "\\ Run /augment while holding your item of choice in your main hand, and two random attributes will be applied. Does not stack, but the quality of attributes scales with heart count.")))));
 
         public static final Item PHASEBREAKER = registerItem(
                         "phasebreaker",
@@ -81,7 +89,8 @@ public class ModItems {
                                                                                                         "§aFRACTAL EDGE: Every 7 hits, the sword induces a flurry of hits on the target."),
                                                                                         net.minecraft.text.Text.literal(
                                                                                                         "§aPHASE CHANGE: Shift + right click to teleport in the direction you are facing. ok so "
-                                                                                                                        + (Main.CONFIG.phaseChangeCooldown
+                                                                                                                        + ((Integer) Main.CONFIG
+                                                                                                                                        .get("phaseChangeCooldown")
                                                                                                                                         / 1000)
                                                                                                                         + " seconds cooldown."))))
                                         .enchantable(15));
@@ -109,18 +118,21 @@ public class ModItems {
                                                                                         net.minecraft.text.Text
                                                                                                         .literal(
                                                                                                                         "§aOVERCLOCK: Shift + right click to apply haste 5 and speed 3 for "
-                                                                                                                                        + (Main.CONFIG.overclockDuration
+                                                                                                                                        + ((Integer) Main.CONFIG
+                                                                                                                                                        .get("overclockDuration")
                                                                                                                                                         / 1000)
                                                                                                                                         + " seconds."),
                                                                                         net.minecraft.text.Text
                                                                                                         .literal("§a" +
-                                                                                                                        (Main.CONFIG.overclockCooldown
+                                                                                                                        ((Integer) Main.CONFIG
+                                                                                                                                        .get("overclockCooldown")
                                                                                                                                         / 1000)
                                                                                                                         + " second cooldown."),
                                                                                         net.minecraft.text.Text
                                                                                                         .literal(
                                                                                                                         "§aBLINK: When below 50% health, the axe applies true invisibility for "
-                                                                                                                                        + (Main.CONFIG.blinkDuration
+                                                                                                                                        + ((Integer) Main.CONFIG
+                                                                                                                                                        .get("blinkDuration")
                                                                                                                                                         / 1000)
                                                                                                                                         + " seconds."))))
                                         .enchantable(15));

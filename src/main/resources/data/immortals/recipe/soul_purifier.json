@@ -2,13 +2,14 @@
     "type": "minecraft:crafting_shaped",
     "pattern": [
       "AAA",
-      "BAB",
+      "DBD",
       "CCC"
     ],
     "key": {
-      "A": "minecraft:netherite_scrap",
-      "B": "minecraft:totem_of_undying",
-      "C": "minecraft:ghast_tear"
+      "A": "minecraft:ghast_tear",
+      "B": "immortals:ascension_relic",
+      "C": "minecraft:echo_shard",
+      "D": "minecraft:netherite_scrap"
     },
     "result": {
       "id": "immortals:soul_purifier",

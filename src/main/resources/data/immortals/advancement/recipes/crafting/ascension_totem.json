@@ -1,24 +1,25 @@
 {
-    "criteria": {
-        "has_relic": {
-            "trigger": "minecraft:inventory_changed",
-            "conditions": {
-                "items": [
-                    {
-                        "item": "immortals:ascension_relic"
-                    }
-                ]
-            }
-        }
-    },
-    "rewards": {
-        "recipes": [
-            "immortals:ascension_totem"
+  "criteria": {
+    "has_relic": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "immortals:ascension_relic",
+            "count": 1
+          }
         ]
-    },
-    "requirements": [
-        [
-            "has_relic"
-        ]
+      }
+    }
+  },
+  "rewards": {
+    "recipes": [
+      "immortals:ascension_totem"
     ]
+  },
+  "requirements": [
+    [
+      "has_relic"
+    ]
+  ]
 }

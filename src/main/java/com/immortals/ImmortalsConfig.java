@@ -8,33 +8,41 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public class ImmortalsConfig {
-    // Default values
-    public long supplyDropIntervalMs = 86_400_000; // 24 hours
-    public int supplyDropRadius = 50; // 50 blocks
-    public int supplyDropUnlockTime = 300_000; // 5 minutes
+    // Config keys and their default values
+    private static final java.util.Map<String, Object> DEFAULTS = java.util.Map.ofEntries(
+            java.util.Map.entry("supplyDropIntervalMs", 86_400_000L),
+            java.util.Map.entry("supplyDropRadius", 50),
+            java.util.Map.entry("supplyDropUnlockTime", 300_000),
+            java.util.Map.entry("dashCooldown", 15_000),
+            java.util.Map.entry("glowCooldown", 60_000),
+            java.util.Map.entry("backdraftCooldown", 30_000),
+            java.util.Map.entry("persistCooldown", 40_000),
+            java.util.Map.entry("blackoutCooldown", 45_000),
+            java.util.Map.entry("dragonAscentCooldown", 45_000),
+            java.util.Map.entry("dragonAscentRadius", 10),
+            java.util.Map.entry("timeSlowDuration", 10_000),
+            java.util.Map.entry("timeSlowCooldown", 60_000),
+            java.util.Map.entry("timeSlowRadius", 7),
+            java.util.Map.entry("overclockCooldown", 45_000),
+            java.util.Map.entry("overclockDuration", 20_000),
+            java.util.Map.entry("blinkDuration", 5_000),
+            java.util.Map.entry("phaseChangeCooldown", 20_000),
+            java.util.Map.entry("immortalXpMultiplier", 0.25));
 
-    public int dashCooldown = 15_000; // 15 seconds
-    public int glowCooldown = 60_000; // 1 minute
-    public int dragonAscentCooldown = 45_000; // 45 seconds
-    public int dragonAscentRadius = 10; // 10 blocks
-    public int timeSlowDuration = 10_000; // 10 seconds
-    public int timeSlowCooldown = 60_000; // 60 seconds
-    public int timeSlowRadius = 7; // 7 blocks
-    public int overclockCooldown = 45_000; // 45 seconds
-    public int overclockDuration = 20_000; // 20 seconds
-    public int blinkDuration = 5_000; // 5 seconds
-    public int phaseChangeCooldown = 20_000; // 20 seconds
-    public double immortalXpMultiplier = 0.25; // 25% More/Less XP for Immortals
+    private final java.util.Map<String, Object> values = new java.util.HashMap<>(DEFAULTS);
 
-    // Load or create defaults
+    public Object get(String key) {
+        if (!values.containsKey(key)) {
+            throw new IllegalArgumentException("Unknown config key: " + key);
+        }
+        return values.get(key);
+    }
+
     public static ImmortalsConfig load() throws IOException {
         ImmortalsConfig cfg = new ImmortalsConfig();
         Properties p = new Properties();
 
-        // Make sure config folder exists
         Files.createDirectories(ConfigPaths.CONFIG_DIR);
-
-        // If file exists, read it
         Path file = ConfigPaths.IMMORTALS_PROPS;
         if (Files.exists(file)) {
             try (InputStream in = Files.newInputStream(file)) {
@@ -42,44 +50,29 @@ public class ImmortalsConfig {
             }
         }
 
-        // Use reflection to parse and write properties dynamically
-        for (var field : ImmortalsConfig.class.getDeclaredFields()) {
-            if (!field.isSynthetic() && (field.getType() == int.class || field.getType() == long.class)) {
-                String key = field.getName();
-                try {
-                    if (field.getType() == int.class) {
-                        field.setInt(cfg, parseInt(p, key, field.getInt(cfg)));
-                    } else if (field.getType() == long.class) {
-                        field.setLong(cfg, parseLong(p, key, field.getLong(cfg)));
-                    }
-                    p.setProperty(key, field.get(cfg).toString());
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException("Failed to access field: " + key, e);
+        for (var entry : DEFAULTS.entrySet()) {
+            String key = entry.getKey();
+            Object def = entry.getValue();
+            String prop = p.getProperty(key);
+            Object value = def;
+            try {
+                if (def instanceof Integer) {
+                    value = prop != null ? Integer.parseInt(prop) : def;
+                } else if (def instanceof Long) {
+                    value = prop != null ? Long.parseLong(prop) : def;
+                } else if (def instanceof Double) {
+                    value = prop != null ? Double.parseDouble(prop) : def;
                 }
+            } catch (NumberFormatException ignored) {
             }
+            cfg.values.put(key, value);
+            p.setProperty(key, value.toString());
         }
 
-        // Write back *all* keys (fills in any missing defaults)
         try (OutputStream out = Files.newOutputStream(file)) {
             p.store(out, "=== Immortals mod settings ===");
         }
 
         return cfg;
-    }
-
-    private static long parseLong(Properties p, String key, long def) {
-        try {
-            return Long.parseLong(p.getProperty(key, Long.toString(def)));
-        } catch (NumberFormatException e) {
-            return def;
-        }
-    }
-
-    private static int parseInt(Properties p, String key, int def) {
-        try {
-            return Integer.parseInt(p.getProperty(key, Integer.toString(def)));
-        } catch (NumberFormatException e) {
-            return def;
-        }
     }
 }

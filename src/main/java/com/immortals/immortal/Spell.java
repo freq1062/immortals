@@ -10,14 +10,11 @@ import java.util.Iterator;
 import java.util.List;
 
 import com.immortals.Utils;
-import com.immortals.item.ModItems;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -78,7 +75,22 @@ public class Spell {
                     .then(CommandManager.argument("slot", IntegerArgumentType.integer(1, 9))
                             .then(CommandManager.argument("spell", StringArgumentType.word())
                                     .suggests((ctx, builder) -> {
-                                        for (String spellId : SpellRegistry.allIds()) {
+                                        ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                        int corr = Utils.getCorruption(player);
+                                        List<String> suggestions = new ArrayList<>();
+                                        if (corr >= 1) {
+                                            suggestions.add("dash");
+                                            suggestions.add("splinter_blow");
+                                        }
+                                        if (corr >= 2) {
+                                            suggestions.add("glow");
+                                            suggestions.add("backdraft");
+                                        }
+                                        if (corr >= 3) {
+                                            suggestions.add("persist");
+                                            suggestions.add("blackout");
+                                        }
+                                        for (String spellId : suggestions) {
                                             builder.suggest(spellId);
                                         }
                                         return builder.buildFuture();
@@ -88,6 +100,7 @@ public class Spell {
                                         int slot = IntegerArgumentType.getInteger(ctx, "slot") - 1;
                                         String spellId = StringArgumentType.getString(ctx, "spell");
                                         SpellRegistry spell = SpellRegistry.fromId(spellId);
+                                        int corr = Utils.getCorruption(player);
 
                                         if (spell == null) {
                                             player.sendMessage(Text.literal("§cUnknown spell: " + spellId), false);
@@ -95,6 +108,39 @@ public class Spell {
                                         }
                                         if (!Utils.getAscended(player)) {
                                             player.sendMessage(Text.literal("§cYou must be ascended to bind spells!"),
+                                                    true);
+                                            return 0;
+                                        }
+                                        if ((spell == SpellRegistry.DASH || spell == SpellRegistry.SPLINTER_BLOW)
+                                                && corr < 1) {
+                                            player.sendMessage(
+                                                    Text.literal(
+                                                            "§cYou need at least 1 corruption to bind this spell."),
+                                                    true);
+                                            return 0;
+                                        }
+                                        if ((spell == SpellRegistry.GLOW || spell == SpellRegistry.BACKDRAFT)
+                                                && corr < 2) {
+                                            player.sendMessage(
+                                                    Text.literal(
+                                                            "§cYou need at least 2 corruption to bind this spell."),
+                                                    true);
+                                            return 0;
+                                        }
+                                        if ((spell == SpellRegistry.PERSIST || spell == SpellRegistry.BLACKOUT)
+                                                && corr < 3) {
+                                            player.sendMessage(
+                                                    Text.literal(
+                                                            "§cYou need at least 3 corruption to bind this spell."),
+                                                    true);
+                                            return 0;
+                                        }
+                                        System.out.println(corr + " " + SpellRegistry.getNumBound(player));
+                                        if (corr <= SpellRegistry.getNumBound(player)
+                                                && SpellRegistry.getBound(player, slot) == null) {
+                                            player.sendMessage(
+                                                    Text.literal("§cYou have " + corr
+                                                            + " available spell slots. Run /unbind [spell] to free up a slot!"),
                                                     true);
                                             return 0;
                                         }
@@ -109,14 +155,38 @@ public class Spell {
                     // Register unbind command
                     .then(CommandManager.argument("spell", StringArgumentType.word())
                             .suggests((ctx, builder) -> {
-                                for (String spellId : SpellRegistry.allIds()) {
-                                    builder.suggest(spellId);
+                                ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                for (int slot = 0; slot < 9; slot++) {
+                                    SpellRegistry bound = SpellRegistry.getBound(player, slot);
+                                    if (bound != null) {
+                                        builder.suggest(bound.getId());
+                                    }
                                 }
+                                builder.suggest("all");
                                 return builder.buildFuture();
                             })
                             .executes(ctx -> {
                                 ServerPlayerEntity player = ctx.getSource().getPlayer();
                                 String spellId = StringArgumentType.getString(ctx, "spell");
+
+                                if ("all".equalsIgnoreCase(spellId)) {
+                                    boolean anyUnbound = false;
+                                    for (int slot = 0; slot < 9; slot++) {
+                                        SpellRegistry bound = SpellRegistry.getBound(player, slot);
+                                        if (bound != null) {
+                                            SpellRegistry.unbind(player, bound);
+                                            anyUnbound = true;
+                                        }
+                                    }
+                                    if (anyUnbound) {
+                                        player.sendMessage(Text.literal("§aAll spells unbound."), true);
+                                        return 1;
+                                    } else {
+                                        player.sendMessage(Text.literal("§eNo spells to unbind."), true);
+                                        return 0;
+                                    }
+                                }
+
                                 SpellRegistry spell = SpellRegistry.fromId(spellId);
 
                                 if (spell == null) {
@@ -145,19 +215,7 @@ public class Spell {
 
                     SpellRegistry bound = SpellRegistry.getBound(player, current);
                     if (bound != null && SpellRegistry.canUse(player, bound) && Utils.getAscended(player)) {
-                        int corr = Utils.getCorruption(player);
-                        // only show if they meet the level requirement
-                        boolean allowed = switch (bound) {
-                            case DASH -> corr >= 2;
-                            case GLOW -> corr >= 3;
-                            case DRAGON_ASCENT -> player.getInventory().contains(new ItemStack(Items.DRAGON_EGG));
-                            case TIMESLOW -> player.getInventory().contains(new ItemStack(ModItems.TIMEKEEPER));
-                            // Only show if player has the dragon egg
-                            default -> false; // future spells get gated here
-                        };
-                        if (allowed) {
-                            player.sendMessage(Text.literal("§e" + bound.getDisplayName()), true);
-                        }
+                        player.sendMessage(Text.literal("§e" + bound.getDisplayName()), true);
                     }
                 }
             }
@@ -187,8 +245,10 @@ public class Spell {
                             }
                             entry.setValue(secondsLeft - 1);
                         } else {
-                            player.sendMessage(Text.literal("§a" + spell.getDisplayName() + " ready!"), true);
-                            cooldownIterator.remove();
+                            if (!spell.getId().equals("splinter_blow")) {
+                                player.sendMessage(Text.literal("§a" + spell.getDisplayName() + " ready!"), true);
+                                cooldownIterator.remove();
+                            }
                         }
                     }
 

@@ -10,6 +10,7 @@ import com.immortals.Immortal.Immortals;
 import com.immortals.Immortal.Spell;
 import com.immortals.Mortal.Mortals;
 import com.immortals.Mortal.Weapons;
+import com.immortals.SupplyDrop.SupplyDropEvents;
 import com.immortals.item.ModItems;
 
 public class Main implements ModInitializer {

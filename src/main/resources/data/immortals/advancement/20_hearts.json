@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:heart"
+    },
+    "title": "The Strongest",
+    "description": "Obtain 20 max hearts as a Mortal.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:15_hearts",
+  "criteria": {
+    "20_hearts": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["20_hearts"]
+  ]
+}

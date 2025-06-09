@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:phasebreaker"
+    },
+    "title": "Master of Space",
+    "description": "Construct the Phasebreaker, capable of splitting space.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:mortals",
+  "criteria": {
+    "master_of_space": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["master_of_space"]
+  ]
+}

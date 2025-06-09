@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:soul_shard"
+    },
+    "title": "The Immortal",
+    "description": "Achieved +3 corruption.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:an_immortal",
+  "criteria": {
+    "the_immortal": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["the_immortal"]
+  ]
+}

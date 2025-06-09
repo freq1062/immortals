@@ -1,5 +1,6 @@
-package com.immortals;
+package com.immortals.SupplyDrop;
 
+import com.immortals.Main;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -21,6 +22,7 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.entity.boss.BossBar;
 import net.minecraft.world.Heightmap;
+import net.minecraft.world.PersistentStateManager;
 import net.minecraft.util.Identifier;
 
 import java.util.Map;
@@ -31,13 +33,12 @@ import java.util.ArrayList;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 
 public class SupplyDropEvents {
+    private static SupplyDropState state;
     private static boolean drop = false;
     private static final Map<BlockPos, SupplyDrop> drops = new ConcurrentHashMap<>();
-    private static int supplyDropRadius = Main.CONFIG.supplyDropRadius;
-    private static long supplyDropIntervalMs = Main.CONFIG.supplyDropIntervalMs;
-    private static long supplyDropUnlockTime = Main.CONFIG.supplyDropUnlockTime;
-
-    private static long lastSpawnTime = 0; // Track last spawn
+    private static int supplyDropRadius = (Integer) Main.CONFIG.get("supplyDropRadius");
+    private static long supplyDropIntervalMs = (Long) Main.CONFIG.get("supplyDropIntervalMs");
+    private static long supplyDropUnlockTime = (Integer) Main.CONFIG.get("supplyDropUnlockTime");
 
     private static class SupplyDrop {
         final BlockPos pos;
@@ -75,6 +76,7 @@ public class SupplyDropEvents {
             // spawnsupply <x> <y> <z>: Spawns a locked supply drop at the given coordinates
             dispatcher.register(
                     CommandManager.literal("spawnsupply")
+                            .requires(source -> source.hasPermissionLevel(4))
                             // no-arg version: spawns at the player
                             .executes(ctx -> {
                                 ServerPlayerEntity p = ctx.getSource().getPlayer();
@@ -98,6 +100,7 @@ public class SupplyDropEvents {
             // supplydrop <start|stop>: Defaults to stop on server start
             dispatcher.register(
                     CommandManager.literal("supplydrop")
+                            .requires(source -> source.hasPermissionLevel(4))
                             .then(CommandManager.literal("start")
                                     .executes(ctx -> {
                                         drop = true;
@@ -110,6 +113,31 @@ public class SupplyDropEvents {
                                         drop = false;
                                         ctx.getSource().sendFeedback(
                                                 () -> Text.literal("Supply Drop timer stopped!"), false);
+                                        return 1;
+                                    }))
+                            .then(CommandManager.literal("next")
+                                    .executes(ctx -> {
+                                        long now = System.currentTimeMillis();
+                                        long nextTime;
+                                        if (!drop) {
+                                            ctx.getSource().sendFeedback(
+                                                    () -> Text.literal("Supply Drop timer is not running."), false);
+                                            return 1;
+                                        }
+                                        if (state == null) {
+                                            ctx.getSource().sendFeedback(
+                                                    () -> Text.literal("Supply Drop state not initialized."), false);
+                                            return 1;
+                                        }
+                                        nextTime = state.lastSpawnTime + supplyDropIntervalMs;
+                                        if (nextTime < now)
+                                            nextTime = now;
+                                        java.time.Instant instant = java.time.Instant.ofEpochMilli(nextTime);
+                                        java.time.ZonedDateTime dateTime = java.time.ZonedDateTime.ofInstant(
+                                                instant, java.time.ZoneId.systemDefault());
+                                        String formatted = dateTime.toString().replace('T', ' ').substring(0, 19);
+                                        ctx.getSource().sendFeedback(
+                                                () -> Text.literal("Next Supply Drop: " + formatted), false);
                                         return 1;
                                     })));
         });
@@ -154,10 +182,16 @@ public class SupplyDropEvents {
 
         // Timer logic
         ServerTickEvents.START_SERVER_TICK.register(server -> {
+
+            ServerWorld overworld = server.getWorld(ServerWorld.OVERWORLD);
+            if (state == null) {
+                PersistentStateManager stateManager = overworld.getPersistentStateManager();
+                state = stateManager.getOrCreate(SupplyDropState.TYPE, "immortals_supplydrop");
+            }
+
             long now = System.currentTimeMillis();
 
-            if (drop && now - lastSpawnTime >= supplyDropIntervalMs) {
-                ServerWorld overworld = server.getWorld(ServerWorld.OVERWORLD);
+            if (drop && now - state.lastSpawnTime >= supplyDropIntervalMs) {
                 int needed = 3 - (int) drops.values().stream().filter(sd -> !sd.unlocked).count();
 
                 if (needed > 0) {
@@ -201,11 +235,11 @@ public class SupplyDropEvents {
                         e.printStackTrace();
                     }
                 }
-                lastSpawnTime = now;
+                state.lastSpawnTime = now;
+                state.markDirty();
             }
 
             // Update each drop’s unlock bar & handle completion
-            ServerWorld overworld = server.getWorld(ServerWorld.OVERWORLD);
             for (SupplyDrop sd : drops.values()) {
                 if (sd.unlocked || sd.unlockAt == 0)
                     continue;

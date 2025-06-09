@@ -1,6 +1,7 @@
 package com.immortals.Mortal;
 
 import com.immortals.Utils;
+import com.immortals.Immortal.SpellRegistry;
 import com.immortals.item.ModItems;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 
@@ -12,13 +13,17 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.attribute.EntityAttribute;
+import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.component.type.AttributeModifierSlot;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
+import net.minecraft.registry.entry.RegistryEntry;
 
 /* Implements the Mortals' Lifesteal system. */
 public class Mortals {
@@ -96,6 +101,11 @@ public class Mortals {
                     if (curr_hp.getBaseValue() < 40.0) {
                         curr_hp.setBaseValue(curr_hp.getBaseValue() + 2.0);
                         stack.decrement(1);
+                        if (curr_hp.getBaseValue() == 30.0) {
+                            Utils.grant((ServerPlayerEntity) player, "15_hearts");
+                        } else if (curr_hp.getBaseValue() == 40.0) {
+                            Utils.grant((ServerPlayerEntity) player, "20_hearts");
+                        }
                         return ActionResult.SUCCESS;
                     } else {
                         player.sendMessage(Text.literal("§5You have reached the maximum number of hearts."),
@@ -149,27 +159,91 @@ public class Mortals {
                                         false);
                                 return 1;
                             })));
+            // Debug command to set ascendance state
             dispatcher.register(CommandManager.literal("setAscendance")
+                    .requires(source -> source.hasPermissionLevel(4))
                     .then(CommandManager.argument("target", EntityArgumentType.player())
                             .then(CommandManager.argument("state", IntegerArgumentType.integer(0, 1))
                                     .executes(ctx -> {
                                         ServerPlayerEntity targetPlayer = EntityArgumentType.getPlayer(ctx, "target");
                                         boolean newState = IntegerArgumentType.getInteger(ctx, "state") == 1;
-                                        EntityAttributeInstance maxHearts = targetPlayer
-                                                .getAttributeInstance(EntityAttributes.MAX_HEALTH);
-                                        if (maxHearts.getBaseValue() != 20.0) {
-                                            maxHearts.setBaseValue(20.0);
+                                        if (Utils.getAscended(targetPlayer) == newState) {
+                                            ctx.getSource().sendFeedback(() -> Text.literal(
+                                                    targetPlayer.getName().getString() + " is already "
+                                                            + (newState ? "immortal" : "mortal") + "."),
+                                                    false);
+                                            return 0;
+                                        }
+                                        Utils.setAscended(targetPlayer, newState);
+                                        // Reset spell bindings
+                                        for (int slot = 0; slot < 9; slot++) {
+                                            SpellRegistry bound = SpellRegistry.getBound(targetPlayer, slot);
+                                            if (bound != null) {
+                                                SpellRegistry.unbind(targetPlayer, bound);
+                                            }
                                         }
 
-                                        Utils.setAscended(targetPlayer, newState);
-
                                         String message = newState
-                                                ? targetPlayer.getName().getString() + " is now immortal."
-                                                : targetPlayer.getName().getString() + " is now mortal.";
+                                                ? targetPlayer.getName().getString() + " is now immortal (+0)."
+                                                : targetPlayer.getName().getString() + " is now mortal (10 hearts).";
                                         ctx.getSource().sendFeedback(() -> Text.literal(message), false);
 
                                         return 1;
                                     }))));
+            dispatcher.register(CommandManager.literal("augment")
+                    .executes(ctx -> {
+                        ServerPlayerEntity player = ctx.getSource().getPlayer();
+                        ItemStack mainHand = player.getMainHandStack();
+                        boolean hasCore = false;
+                        int slotWithCore = -1;
+
+                        // Search for augmentation core in inventory
+                        for (int i = 0; i < player.getInventory().size(); i++) {
+                            ItemStack stack = player.getInventory().getStack(i);
+                            if (stack.getItem() == ModItems.AUGMENTATION_CORE && stack.getCount() > 0) {
+                                hasCore = true;
+                                slotWithCore = i;
+                                break;
+                            }
+                        }
+
+                        if (!hasCore) {
+                            player.sendMessage(Text.literal("You need an Augmentation Core to use this command."),
+                                    false);
+                            return 0;
+                        }
+
+                        if (mainHand.isEmpty()) {
+                            player.sendMessage(Text.literal("You must be holding an item to augment."), false);
+                            return 0;
+                        }
+
+                        if (mainHand.getCount() != 1) {
+                            player.sendMessage(Text.literal("You can only augment an item stack of size 1."), false);
+                            return 0;
+                        }
+
+                        if (Utils.hasModifier(mainHand, "immortals:augmented")) {
+                            player.sendMessage(Text.literal("This item has already been augmented."), true);
+                            return 0; // Or early exit from the method
+                        }
+                        // Remove one augmentation core
+                        player.getInventory().getStack(slotWithCore).decrement(1);
+                        double numHearts = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH) / 2;
+                        for (java.util.AbstractMap.SimpleEntry<RegistryEntry<EntityAttribute>, Float> entry : Augmentation
+                                .rollAttributes(numHearts)) {
+                            Utils.addModifier(
+                                    mainHand,
+                                    "immortals:augmented",
+                                    AttributeModifierSlot.ANY,
+                                    entry.getKey(),
+                                    entry.getValue(),
+                                    EntityAttributeModifier.Operation.ADD_VALUE);
+                        }
+                        Utils.grant(player, "augmenter");
+                        player.sendMessage(Text.literal("§aAugmented!"), false);
+                        return 1;
+                    }));
         });
     }
 }

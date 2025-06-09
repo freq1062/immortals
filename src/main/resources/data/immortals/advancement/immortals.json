@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:ascension_totem"
+    },
+    "title": "Immortals",
+    "description": "Strength lies in Magic.",
+    "background": "immortals:textures/gui/advancements/backgrounds/immortal_bg.png",
+    "show_toast": false,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "tick": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "requirements": [
+    ["tick"]
+  ]
+}

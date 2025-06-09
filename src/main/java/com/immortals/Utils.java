@@ -17,7 +17,14 @@ import net.minecraft.particle.ParticleTypes;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardDisplaySlot;
 import net.minecraft.scoreboard.ScoreboardObjective;
-
+import net.minecraft.component.type.AttributeModifierSlot;
+import net.minecraft.component.type.AttributeModifiersComponent;
+import net.minecraft.advancement.AdvancementProgress;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.entity.attribute.EntityAttribute;
+import net.minecraft.entity.attribute.EntityAttributeModifier;
+import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.util.Identifier;
 import com.immortals.api.PlayerImmortalsData;
 import com.immortals.Immortal.Spell;
 
@@ -33,6 +40,8 @@ public class Utils {
     public static void setAscended(ServerPlayerEntity player, boolean ascended) {
         PlayerImmortalsData data = (PlayerImmortalsData) player;
         data.setImmortal(ascended);
+        data.setCorruption(0);
+        player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0);
     }
 
     // Return the player's corruption level
@@ -47,6 +56,11 @@ public class Utils {
         data.setCorruption(data.getCorruption() + level);
     }
 
+    public static void setCorruption(ServerPlayerEntity player, int level) {
+        PlayerImmortalsData data = (PlayerImmortalsData) player;
+        data.setCorruption(level);
+    }
+
     // Helper function for getting the next shard cost based on the corruption level
     public static int nextShardCost(int level) {
         return switch (level) {
@@ -59,17 +73,7 @@ public class Utils {
 
     public static void applyCorruptionEffects(ServerPlayerEntity player) {
         int level = getCorruption(player);
-
-        // Reset health and effects
-        player.clearStatusEffects();
-        player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0); // Reset to 10 hearts
-
         int duration = 40; // 2 seconds (40 ticks)
-
-        if (level <= -1) {
-            // -1: -1 heart, -10% XP gain (XP handled elsewhere)
-            player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(18.0);
-        }
 
         if (level <= -2) {
             // -2: Slowness I
@@ -81,6 +85,11 @@ public class Utils {
             // -3: Weakness I
             player.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.WEAKNESS, duration, 0, false, false));
+        }
+
+        if (level >= 1) {
+            // +1: Speed I
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.FIRE_RESISTANCE, duration, 0, false, false));
         }
 
         if (level >= 2) {
@@ -203,5 +212,59 @@ public class Utils {
         Spell.addTask(player.getUuid(), () -> {
             sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
         }, 250);
+    }
+
+    public static void addModifier(
+            ItemStack itemStack,
+            String identifier,
+            AttributeModifierSlot slot,
+            RegistryEntry<EntityAttribute> attribute,
+            double amount,
+            EntityAttributeModifier.Operation operation) {
+
+        AttributeModifiersComponent existingComponent = itemStack.get(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+
+        AttributeModifiersComponent.Builder modifierComponent = AttributeModifiersComponent.builder();
+        if (existingComponent != null) {
+            existingComponent.modifiers().forEach(entry -> {
+                modifierComponent.add(entry.attribute(), entry.modifier(), entry.slot());
+            });
+        }
+
+        EntityAttributeModifier modifier = new EntityAttributeModifier(
+                net.minecraft.util.Identifier.of(identifier),
+                amount,
+                operation);
+        modifierComponent.add(attribute, modifier, slot);
+        itemStack.set(DataComponentTypes.ATTRIBUTE_MODIFIERS, modifierComponent.build());
+    }
+
+    public static void clearAllModifiers(ItemStack itemStack) {
+        itemStack.set(DataComponentTypes.ATTRIBUTE_MODIFIERS, AttributeModifiersComponent.builder().build());
+    }
+
+    public static boolean hasModifier(ItemStack itemStack, String id) {
+        AttributeModifiersComponent existingComponent = itemStack.get(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (existingComponent == null)
+            return false;
+
+        System.out.println(existingComponent);
+
+        return existingComponent.modifiers().stream()
+                .anyMatch(entry -> id.equals(entry.modifier().id().toString()));
+    }
+
+    public static void grant(ServerPlayerEntity player, String id) {
+        Identifier advId = Identifier.of("immortals", id);
+        var advEntry = player.server.getAdvancementLoader().get(advId);
+
+        if (advEntry != null) {
+            AdvancementProgress progress = player.getAdvancementTracker().getProgress(advEntry);
+            if (!progress.isDone()) {
+                for (String criterion : progress.getUnobtainedCriteria()) {
+                    player.getAdvancementTracker().grantCriterion(advEntry, criterion);
+                }
+            }
+        }
     }
 }

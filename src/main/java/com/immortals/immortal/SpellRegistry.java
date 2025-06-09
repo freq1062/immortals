@@ -31,11 +31,12 @@ import com.immortals.item.ModItems;
  */
 public enum SpellRegistry {
 
-    DASH("dash", Main.CONFIG.dashCooldown) {
+    DASH("dash", (Integer) Main.CONFIG.get("dashCooldown")) {
         @Override
         public void activate(ServerPlayerEntity player) {
             Vec3d dir = player.getRotationVec(1.0F);
             Vec3d startPos = player.getPos();
+            // Propel player 10 blocks horizontally and 2 blocks vertically
             player.addVelocity(dir.x * 2.5, dir.y * 1.2, dir.z * 2.5);
             player.velocityModified = true;
 
@@ -75,7 +76,14 @@ public enum SpellRegistry {
         }
     },
 
-    GLOW("glow", Main.CONFIG.glowCooldown) {
+    SPLINTER_BLOW("splinter_blow", 0) {
+        @Override
+        public void activate(ServerPlayerEntity player) {
+            // Dummy implementation, spell logic in attack callback
+        }
+    },
+
+    GLOW("glow", (Integer) Main.CONFIG.get("glowCooldown")) {
         @Override
         public void activate(ServerPlayerEntity player) {
             ServerWorld world = (ServerWorld) player.getWorld();
@@ -123,7 +131,113 @@ public enum SpellRegistry {
         }
     },
 
-    DRAGON_ASCENT("dragon_ascent", Main.CONFIG.dragonAscentCooldown) {
+    BACKDRAFT("backdraft", (Integer) Main.CONFIG.get("backdraftCooldown")) {
+        @Override
+        public void activate(ServerPlayerEntity player) {
+            Vec3d dir = player.getRotationVec(1.0F);
+            Vec3d startPos = player.getPos();
+
+            // Propel player 5 blocks backwards horizontally and 2 blocks vertically
+            Vec3d backward = new Vec3d(-dir.x, 0, -dir.z).normalize().multiply(1.05);
+            player.addVelocity(backward.x, 1.02, backward.z);
+            player.velocityModified = true;
+
+            ServerWorld world = (ServerWorld) player.getWorld();
+
+            // Set all players within 3 blocks and in FOV on fire
+            double radius = 3.0;
+            double fovCos = Math.cos(Math.toRadians(60)); // 60 degree FOV (30 deg each side)
+            for (ServerPlayerEntity other : world.getPlayers()) {
+                if (other == player)
+                    continue;
+                Vec3d toOther = other.getPos().subtract(player.getPos());
+                double dist = toOther.length();
+                if (dist <= radius) {
+                    Vec3d toOtherNorm = toOther.normalize();
+                    double dot = dir.dotProduct(toOtherNorm);
+                    if (dot >= fovCos) {
+                        other.damage(world, world.getDamageSources().magic(), 5.0f);
+                        other.setOnFireFor(4);
+                    }
+                }
+            }
+
+            // Play sound effects
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    net.minecraft.sound.SoundEvents.ENTITY_BLAZE_SHOOT,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 0.5F, 1.2F);
+
+            // Display a disc of fire in front of the player
+            int particles = 40;
+            double discRadius = 2.5;
+            Vec3d discCenter = startPos.add(dir.multiply(2.0));
+            for (int i = 0; i < particles; i++) {
+                double angle = 2 * Math.PI * i / particles;
+                double localX = Math.cos(angle) * discRadius;
+                double localY = Math.sin(angle) * discRadius;
+                Vec3d localOffset = new Vec3d(localX, localY, 0);
+                Vec3d rotated = rotateVectorToMatchDirection(localOffset, dir);
+                Vec3d particlePos = discCenter.add(rotated);
+                world.spawnParticles(ParticleTypes.FLAME, particlePos.x, particlePos.y, particlePos.z, 1, 0, 0, 0,
+                        0.01);
+            }
+            player.sendMessage(Text.literal("§6Backdraft activated! Nearby players are scorched."), true);
+        }
+    },
+
+    PERSIST("persist", (Integer) Main.CONFIG.get("persistCooldown")) {
+        @Override
+        public void activate(ServerPlayerEntity player) {
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 100, 1, false, true));
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 20000, 2, false, true));
+            player.sendMessage(Text.literal("§aYour will strengthens... (+Resistance II)"), true);
+        }
+    },
+
+    BLACKOUT("blackout", (Integer) Main.CONFIG.get("blackoutCooldown")) {
+        @Override
+        public void activate(ServerPlayerEntity player) {
+            ServerWorld world = (ServerWorld) player.getWorld();
+            double radius = 10.0;
+            int duration = 100; // 5 seconds (20 ticks per second)
+            int amplifier = 0;
+
+            // Apply blindness to all players within 10 blocks (including self)
+            for (ServerPlayerEntity other : world.getPlayers()) {
+                if (other == player) {
+                    // Only add invisibility to self
+                    other.addStatusEffect(
+                            new StatusEffectInstance(StatusEffects.INVISIBILITY, duration, amplifier, false, true));
+                } else if (other.squaredDistanceTo(player) <= radius * radius) {
+                    // Add both blindness and invisibility to others
+                    other.addStatusEffect(
+                            new StatusEffectInstance(StatusEffects.BLINDNESS, duration, amplifier, false, true));
+                    other.addStatusEffect(
+                            new StatusEffectInstance(StatusEffects.INVISIBILITY, duration, amplifier, false, true));
+                }
+            }
+
+            // Play a sound and spawn particles for feedback
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    net.minecraft.sound.SoundEvents.ENTITY_WARDEN_HEARTBEAT,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 1.2F, 0.7f);
+
+            for (double r = 0; r <= radius; r += 0.5) {
+                int points = Math.max(8, (int) (r * 8));
+                for (int i = 0; i < points; i++) {
+                    double angle = 2 * Math.PI * i / points;
+                    double x = player.getX() + Math.cos(angle) * r;
+                    double z = player.getZ() + Math.sin(angle) * r;
+                    double y = player.getY() + 1.0;
+                    world.spawnParticles(ParticleTypes.SMOKE, x, y, z, 2, 0, 0, 0, 0.05);
+                }
+            }
+
+            player.sendMessage(Text.literal("§8Blackout! Nearby players are blinded."), true);
+        }
+    },
+
+    DRAGON_ASCENT("dragon_ascent", (Integer) Main.CONFIG.get("dragonAscentCooldown")) {
         @Override
         public void activate(ServerPlayerEntity player) {
             // Must have dragon egg
@@ -148,7 +262,7 @@ public enum SpellRegistry {
             player.addStatusEffect(new StatusEffectInstance(StatusEffects.LEVITATION, 60, 0, false, false));
 
             ServerWorld world = (ServerWorld) player.getWorld();
-            double radius = Main.CONFIG.dragonAscentRadius; // detection range
+            double radius = (Integer) Main.CONFIG.get("dragonAscentRadius"); // detection range
             world.playSound(null, player.getX(), player.getY(), player.getZ(),
                     net.minecraft.sound.SoundEvents.ENTITY_ENDER_DRAGON_AMBIENT,
                     net.minecraft.sound.SoundCategory.PLAYERS, 0.5F, 1.0F);
@@ -191,7 +305,7 @@ public enum SpellRegistry {
         }
     },
 
-    TIMESLOW("timeslow", Main.CONFIG.timeSlowCooldown) {
+    TIMESLOW("timeslow", (Integer) Main.CONFIG.get("timeSlowCooldown")) {
         @Override
         public void activate(ServerPlayerEntity player) {
 
@@ -204,8 +318,8 @@ public enum SpellRegistry {
 
             ServerWorld world = (ServerWorld) player.getWorld();
             Vec3d center = player.getPos();
-            int radius = Main.CONFIG.timeSlowRadius;
-            int duration = Main.CONFIG.timeSlowDuration;
+            int radius = (Integer) Main.CONFIG.get("timeSlowRadius");
+            int duration = (Integer) Main.CONFIG.get("timeSlowDuration");
             int checkInterval = 100; // 2
                                      // ticks
                                      // between
@@ -256,6 +370,7 @@ public enum SpellRegistry {
                     List<Entity> inZone = world.getOtherEntities(null,
                             player.getBoundingBox().expand(radius).offset(effectCenter.subtract(player.getPos())),
                             e -> e != player && e.squaredDistanceTo(effectCenter) <= radius * radius);
+                    System.out.println("Entities in zone: " + inZone.size());
 
                     // Slow new entities entering the zone
                     for (Entity entity : inZone) {
@@ -392,6 +507,35 @@ public enum SpellRegistry {
         return SpellRegistry.fromId(id);
     }
 
+    /**
+     * Returns the number of spells the player has bound, taking into account
+     * special spells
+     */
+    public static int getNumBound(ServerPlayerEntity player) {
+        Map<Integer, String> bindings = ((PlayerImmortalsData) player).getSpellBindings();
+        Integer numBound = bindings.size();
+        if (player.getInventory().contains(new ItemStack(ModItems.TIMEKEEPER))) {
+            numBound--;
+        }
+        if (player.getInventory().contains(new ItemStack(Items.DRAGON_EGG))) {
+            numBound--;
+        }
+        return numBound;
+    }
+
+    /**
+     * Returns the slot number (0-8) where the spell is bound, or -1 if not bound
+     */
+    public static int getSlot(ServerPlayerEntity player, SpellRegistry spell) {
+        Map<Integer, String> bindings = ((PlayerImmortalsData) player).getSpellBindings();
+        for (Map.Entry<Integer, String> entry : bindings.entrySet()) {
+            if (spell.getId().equals(entry.getValue())) {
+                return entry.getKey();
+            }
+        }
+        return -1;
+    }
+
     /** Check if a spell is bound to any slot */
     public static boolean isSpellBound(ServerPlayerEntity player, SpellRegistry spell) {
         Map<Integer, String> bindings = ((PlayerImmortalsData) player).getSpellBindings();
@@ -439,10 +583,13 @@ public enum SpellRegistry {
         }
 
         // Level requirements
-        if (spell == DASH && corr < 2) {
+        if (spell == DASH && corr < 1 || spell == SPLINTER_BLOW && corr < 1) {
             return false;
         }
-        if (spell == GLOW && corr < 3) {
+        if (spell == GLOW && corr < 2 || spell == BACKDRAFT && corr < 2) {
+            return false;
+        }
+        if (spell == BLACKOUT && corr < 3 || spell == PERSIST && corr < 3) {
             return false;
         }
         // Must have a dragon egg to use dragon ascent
