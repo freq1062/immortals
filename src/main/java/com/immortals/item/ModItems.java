@@ -72,7 +72,7 @@ public class ModItems {
                                                                         net.minecraft.text.Text.literal(
                                                                                         ""),
                                                                         net.minecraft.text.Text.literal(
-                                                                                        "\\ Run /augment while holding your unstackable item of choice"),
+                                                                                        "Run /augment while holding your unstackable item of choice"),
                                                                         net.minecraft.text.Text.literal(
                                                                                         "in your main hand, and two random attributes will be applied."),
                                                                         net.minecraft.text.Text.literal(

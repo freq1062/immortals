@@ -482,7 +482,7 @@ public class Immortals {
 			}
 
 			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-				Integer found = Utils.inventoryHas(player, Items.TOTEM_OF_UNDYING);
+				Integer found = Utils.inventoryHas(player, Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE);
 				if (found != null) {
 					// If found is main inventory size, it's in the offhand
 					if (found == player.getInventory().main.size()) {

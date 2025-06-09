@@ -76,7 +76,7 @@ public class Augmentation {
                 secondIdx = RANDOM.nextInt(size);
             } while (secondIdx == firstIdx);
             selectedRanges = Arrays.asList(AUGMENT_POOL_1.get(firstIdx), AUGMENT_POOL_1.get(secondIdx));
-        } else if (numHearts <= 13) {
+        } else if (numHearts <= 15) {
             // Pick 2 distinct from AUGMENT_POOL_2
             int size = AUGMENT_POOL_2.size();
             int firstIdx = RANDOM.nextInt(size);
