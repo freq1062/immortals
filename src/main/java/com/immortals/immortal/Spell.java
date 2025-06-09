@@ -10,11 +10,13 @@ import java.util.Iterator;
 import java.util.List;
 
 import com.immortals.Utils;
+import com.immortals.item.ModItems;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -90,6 +92,12 @@ public class Spell {
                                             suggestions.add("persist");
                                             suggestions.add("blackout");
                                         }
+                                        if (Utils.inventoryHas(player, Items.DRAGON_EGG) != null) {
+                                            suggestions.add("dragon_ascent");
+                                        }
+                                        if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != null) {
+                                            suggestions.add("timeslow");
+                                        }
                                         for (String spellId : suggestions) {
                                             builder.suggest(spellId);
                                         }
@@ -111,33 +119,43 @@ public class Spell {
                                                     true);
                                             return 0;
                                         }
-                                        if ((spell == SpellRegistry.DASH || spell == SpellRegistry.SPLINTER_BLOW)
-                                                && corr < 1) {
+                                        // Special case for dragon_ascent and timeslow
+                                        if ("dragon_ascent".equals(spell.getId()) || "timeslow".equals(spell.getId())) {
+                                            SpellRegistry.bind(player, slot, spell);
+                                            player.sendMessage(Text.literal("§aSpell bound to slot " + (slot + 1)),
+                                                    true);
+                                            return 1;
+                                        }
+                                        // Check corruption requirements
+                                        int requiredCorr = 0;
+                                        if (spell == SpellRegistry.DASH || spell == SpellRegistry.SPLINTER_BLOW) {
+                                            requiredCorr = 1;
+                                        } else if (spell == SpellRegistry.GLOW || spell == SpellRegistry.BACKDRAFT) {
+                                            requiredCorr = 2;
+                                        } else if (spell == SpellRegistry.PERSIST || spell == SpellRegistry.BLACKOUT) {
+                                            requiredCorr = 3;
+                                        }
+                                        if (requiredCorr > 0 && corr < requiredCorr) {
                                             player.sendMessage(
-                                                    Text.literal(
-                                                            "§cYou need at least 1 corruption to bind this spell."),
+                                                    Text.literal("§cYou need at least " + requiredCorr
+                                                            + " corruption to bind this spell."),
                                                     true);
                                             return 0;
                                         }
-                                        if ((spell == SpellRegistry.GLOW || spell == SpellRegistry.BACKDRAFT)
-                                                && corr < 2) {
-                                            player.sendMessage(
-                                                    Text.literal(
-                                                            "§cYou need at least 2 corruption to bind this spell."),
-                                                    true);
-                                            return 0;
-                                        }
-                                        if ((spell == SpellRegistry.PERSIST || spell == SpellRegistry.BLACKOUT)
-                                                && corr < 3) {
-                                            player.sendMessage(
-                                                    Text.literal(
-                                                            "§cYou need at least 3 corruption to bind this spell."),
-                                                    true);
-                                            return 0;
-                                        }
+
+                                        SpellRegistry bound = SpellRegistry.getBound(player, slot);
+                                        // Refuse if the player doesn't have enough slots and is not replacing a
+                                        // non-free spell (dragon ascent and timeslow)
+                                        System.out.println(bound);
                                         System.out.println(corr + " " + SpellRegistry.getNumBound(player));
+                                        System.out.println((bound == null
+                                                || "dragon_ascent".equals(bound.getId())
+                                                || "timeslow".equals(bound.getId())));
+                                        System.out.println(corr <= SpellRegistry.getNumBound(player));
                                         if (corr <= SpellRegistry.getNumBound(player)
-                                                && SpellRegistry.getBound(player, slot) == null) {
+                                                && (bound == null
+                                                        || "dragon_ascent".equals(bound.getId())
+                                                        || "timeslow".equals(bound.getId()))) {
                                             player.sendMessage(
                                                     Text.literal("§cYou have " + corr
                                                             + " available spell slots. Run /unbind [spell] to free up a slot!"),

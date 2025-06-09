@@ -3,13 +3,13 @@
 	"id": "immortals",
 	"version": "${version}",
 	"name": "Immortals S3",
-	"description": "Adds the totem of ascension and its abilities",
+	"description": "Adds a new Mortals and Immortals system for Immortals SMP S3",
 	"authors": [
 		"freq1062"
 	],
 	"contact": {
 		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"sources": "https://github.com/freq1062/immortals-s3"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/immortals/icon.png",

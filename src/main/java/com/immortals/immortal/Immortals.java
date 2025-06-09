@@ -227,10 +227,9 @@ public class Immortals {
 					// Scale the soul shard drop count based on victim's max health
 					int dropCount = 1;
 					double maxHearts = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue() / 2.0;
-					if (maxHearts >= 14 && maxHearts <= 16)
-						dropCount = 2;
-					else if (maxHearts >= 17)
-						dropCount = 3;
+					// Don't drop if the victim has less than 5 hearts
+					if (maxHearts <= 5)
+						dropCount = 0;
 
 					victim.dropItem(new ItemStack(ModItems.SOUL_SHARD, dropCount), false);
 
@@ -349,7 +348,7 @@ public class Immortals {
 																				"Propels you 10 blocks horizontally.\nCooldown 15s.\nRun /bind [slot] dash to use.")))))
 										.append(Text.literal("§6 and "))
 										.append(
-												Text.literal("§cSpliter Blow")
+												Text.literal("§cSplinter Blow")
 														.styled(style -> style.withHoverEvent(
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
@@ -483,14 +482,17 @@ public class Immortals {
 			}
 
 			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-				for (int i = 0; i < player.getInventory().size(); i++) {
-					ItemStack s = player.getInventory().getStack(i);
-					if (s.getItem() == Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE) {
-						player.getInventory().removeStack(i);
-						player.sendMessage(Text.literal(
-								"You accidentally dropped the Netherite Upgrade Template. (Netherite Upgrades Removed)"),
-								false);
+				Integer found = Utils.inventoryHas(player, Items.TOTEM_OF_UNDYING);
+				if (found != null) {
+					// If found is main inventory size, it's in the offhand
+					if (found == player.getInventory().main.size()) {
+						player.getInventory().offHand.set(0, ItemStack.EMPTY);
+					} else {
+						player.getInventory().removeStack(found);
 					}
+					player.sendMessage(Text.literal(
+							"You accidentally dropped the Netherite Upgrade Template. (Netherite Upgrades Removed)"),
+							false);
 				}
 				if (Utils.getAscended(player)) {
 					// Apply passive corruption effects
@@ -498,29 +500,35 @@ public class Immortals {
 						Utils.applyCorruptionEffects(player);
 					}
 					// Remove normal totems if ascended
-					for (int i = 0; i < player.getInventory().size(); i++) {
-						ItemStack s = player.getInventory().getStack(i);
-						if (s.getItem() == Items.TOTEM_OF_UNDYING) {
-							player.getInventory().removeStack(i);
-							player.sendMessage(Text.literal(
-									"§cWhat, you're not immortal enough? (Totems Removed)"),
-									false);
-						} else if (s.getItem() == Items.DRAGON_EGG
-								&& !SpellRegistry.isSpellBound((ServerPlayerEntity) player,
-										SpellRegistry.DRAGON_ASCENT)) {
-							Utils.grant(player, "dragon_ascent");
-							SpellRegistry.bindDefault(player, 0, SpellRegistry.DRAGON_ASCENT);
-						} else if (s.getItem() == ModItems.TIMEKEEPER
-								&& !SpellRegistry.isSpellBound((ServerPlayerEntity) player,
-										SpellRegistry.TIMESLOW)) {
-							Utils.grant(player, "timeslow");
-							SpellRegistry.bindDefault(player, 6, SpellRegistry.TIMESLOW);
-						} else if (s.getItem() == ModItems.AUGMENTATION_CORE) {
-							player.getInventory().removeStack(i);
-							player.sendMessage(Text.literal(
-									"§cThe Augmentation Core shattered into pieces. (Augmentation cores removed)"),
-									false);
+					found = Utils.inventoryHas(player, Items.TOTEM_OF_UNDYING);
+					if (found != null) {
+						if (found == player.getInventory().main.size()) {
+							player.getInventory().offHand.set(0, ItemStack.EMPTY);
+						} else {
+							player.getInventory().removeStack(found);
 						}
+						player.sendMessage(Text.literal(
+								"§cWhat, you're not immortal enough? (Totems Removed)"),
+								false);
+					}
+					found = Utils.inventoryHas(player, Items.DRAGON_EGG);
+					if (found != null) {
+						Utils.grant(player, "dragon_ascent");
+					}
+					found = Utils.inventoryHas(player, ModItems.TIMEKEEPER);
+					if (found != null) {
+						Utils.grant(player, "timeslow");
+					}
+					found = Utils.inventoryHas(player, ModItems.AUGMENTATION_CORE);
+					if (found != null) {
+						if (found == player.getInventory().main.size()) {
+							player.getInventory().offHand.set(0, ItemStack.EMPTY);
+						} else {
+							player.getInventory().removeStack(found);
+						}
+						player.sendMessage(Text.literal(
+								"§cThe Augmentation Core shattered into pieces. (Augmentation cores removed)"),
+								false);
 					}
 					// Activate Persist passive ability
 					if (Utils.getCorruption(player) >= 3 &&

@@ -370,7 +370,6 @@ public enum SpellRegistry {
                     List<Entity> inZone = world.getOtherEntities(null,
                             player.getBoundingBox().expand(radius).offset(effectCenter.subtract(player.getPos())),
                             e -> e != player && e.squaredDistanceTo(effectCenter) <= radius * radius);
-                    System.out.println("Entities in zone: " + inZone.size());
 
                     // Slow new entities entering the zone
                     for (Entity entity : inZone) {
@@ -513,14 +512,13 @@ public enum SpellRegistry {
      */
     public static int getNumBound(ServerPlayerEntity player) {
         Map<Integer, String> bindings = ((PlayerImmortalsData) player).getSpellBindings();
-        Integer numBound = bindings.size();
-        if (player.getInventory().contains(new ItemStack(ModItems.TIMEKEEPER))) {
-            numBound--;
+        int count = 0;
+        for (String id : bindings.values()) {
+            if (!"dragon_ascent".equals(id) && !"timeslow".equals(id)) {
+                count++;
+            }
         }
-        if (player.getInventory().contains(new ItemStack(Items.DRAGON_EGG))) {
-            numBound--;
-        }
-        return numBound;
+        return count;
     }
 
     /**

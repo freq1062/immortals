@@ -194,20 +194,12 @@ public class Mortals {
                     .executes(ctx -> {
                         ServerPlayerEntity player = ctx.getSource().getPlayer();
                         ItemStack mainHand = player.getMainHandStack();
-                        boolean hasCore = false;
-                        int slotWithCore = -1;
 
                         // Search for augmentation core in inventory
-                        for (int i = 0; i < player.getInventory().size(); i++) {
-                            ItemStack stack = player.getInventory().getStack(i);
-                            if (stack.getItem() == ModItems.AUGMENTATION_CORE && stack.getCount() > 0) {
-                                hasCore = true;
-                                slotWithCore = i;
-                                break;
-                            }
-                        }
 
-                        if (!hasCore) {
+                        Integer slotWithCore = Utils.inventoryHas(player, ModItems.AUGMENTATION_CORE);
+
+                        if (slotWithCore == null) {
                             player.sendMessage(Text.literal("You need an Augmentation Core to use this command."),
                                     false);
                             return 0;
@@ -228,7 +220,13 @@ public class Mortals {
                             return 0; // Or early exit from the method
                         }
                         // Remove one augmentation core
-                        player.getInventory().getStack(slotWithCore).decrement(1);
+                        if (slotWithCore == player.getInventory().main.size()) {
+                            // Found in offhand
+                            player.getInventory().offHand.get(0).decrement(1);
+                        } else {
+                            // Found in main inventory
+                            player.getInventory().getStack(slotWithCore).decrement(1);
+                        }
                         double numHearts = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH) / 2;
                         for (java.util.AbstractMap.SimpleEntry<RegistryEntry<EntityAttribute>, Float> entry : Augmentation
                                 .rollAttributes(numHearts)) {

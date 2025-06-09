@@ -15,7 +15,7 @@ public class ImmortalsConfig {
             java.util.Map.entry("supplyDropUnlockTime", 300_000),
             java.util.Map.entry("dashCooldown", 15_000),
             java.util.Map.entry("glowCooldown", 60_000),
-            java.util.Map.entry("backdraftCooldown", 30_000),
+            java.util.Map.entry("backdraftCooldown", 25_000),
             java.util.Map.entry("persistCooldown", 40_000),
             java.util.Map.entry("blackoutCooldown", 45_000),
             java.util.Map.entry("dragonAscentCooldown", 45_000),

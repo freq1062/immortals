@@ -100,6 +100,22 @@ public class Utils {
         }
     }
 
+    public static Integer inventoryHas(ServerPlayerEntity player, Item item) {
+        // Check main inventory
+        for (int i = 0; i < player.getInventory().main.size(); i++) {
+            ItemStack stack = player.getInventory().main.get(i);
+            if (stack.isOf(item)) {
+                return i;
+            }
+        }
+        // Check offhand (returns main.size() for offhand slot if found)
+        ItemStack offhand = player.getInventory().offHand.get(0);
+        if (offhand.isOf(item)) {
+            return player.getInventory().main.size();
+        }
+        return null;
+    }
+
     // Draws the dragon ascent rune circle at pos
     public static void drawDragonAscent(Vec3d pos, World world) {
         if (!(world instanceof ServerWorld serverWorld))
