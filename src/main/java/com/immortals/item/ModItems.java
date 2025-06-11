@@ -61,22 +61,23 @@ public class ModItems {
                                                         java.util.List.of(
                                                                         net.minecraft.text.Text.literal(
                                                                                         "§cA piece of mortal essence.")))));
-        public static final Item AUGMENTATION_CORE = registerItem("augmentation_core", Item::new, new Item.Settings()
-                        .component(DataComponentTypes.LORE,
-                                        new LoreComponent(
-                                                        java.util.List.of(
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        "To compete with magical powers, Mortal ingenuity"),
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        "discovered how to augment the attributes of various items."),
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        ""),
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        "Run /augment while holding your unstackable item of choice"),
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        "in your main hand, and two random attributes will be applied."),
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        "Does not stack, but the quality of attributes scales with heart count.")))));
+        public static final Item AUGMENTATION_CORE = registerItem("augmentation_core", Item::new,
+                        new Item.Settings()
+                                        .component(DataComponentTypes.LORE,
+                                                        new LoreComponent(
+                                                                        java.util.List.of(
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "To compete with magical powers, Mortal ingenuity"),
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "discovered how to augment the attributes of various items."),
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        ""),
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "Run /augment while holding your unstackable item of choice"),
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "in your main hand, and two random attributes will be applied."),
+                                                                                        net.minecraft.text.Text.literal(
+                                                                                                        "Does not stack, but the quality of attributes scales with heart count.")))));
 
         public static final Item PHASEBREAKER = registerItem(
                         "phasebreaker",

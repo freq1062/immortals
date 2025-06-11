@@ -2,6 +2,7 @@ package com.immortals.client;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.VertexConsumer;
@@ -10,12 +11,15 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardObjective;
+import net.minecraft.text.Text;
+
 import org.joml.Matrix4f;
 
 import java.util.Map;
@@ -24,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.AbstractMap.SimpleEntry;
 
 import net.minecraft.util.math.RotationAxis;
+
+import com.immortals.Mortal.ModComponents;
 import com.mojang.blaze3d.systems.RenderSystem;
 
 public class ImmortalsClient implements ClientModInitializer {
@@ -50,6 +56,33 @@ public class ImmortalsClient implements ClientModInitializer {
   @Override
   public void onInitializeClient() {
     WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+
+      ItemTooltipCallback.EVENT.register((stack, tooltipContext, tooltipType, lines) -> {
+        String uuidStr = stack.getOrDefault(ModComponents.OWNER_COMPONENT, "");
+        if (!uuidStr.isEmpty()) {
+          boolean alreadyPresent = lines.stream()
+              .anyMatch(line -> line.getString().startsWith("Owner: "));
+          if (!alreadyPresent) {
+            try {
+              UUID uuid = UUID.fromString(uuidStr);
+              MinecraftClient client = MinecraftClient.getInstance();
+              String name = null;
+              if (client != null && client.world != null) {
+                PlayerEntity player = client.world.getPlayerByUuid(uuid);
+                if (player != null) {
+                  name = player.getName().getString();
+                }
+              }
+              String display = name != null ? name : uuidStr;
+              lines.add(Text.literal("Owner: " + display).formatted(Formatting.GOLD));
+            } catch (IllegalArgumentException e) {
+              // Fallback if uuidStr is not a valid UUID
+              lines.add(Text.literal("Owner: " + uuidStr).formatted(Formatting.GOLD));
+            }
+          }
+        }
+      });
+
       MinecraftClient client = MinecraftClient.getInstance();
       if (client.world == null)
         return;

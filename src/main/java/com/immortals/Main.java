@@ -10,6 +10,7 @@ import com.immortals.Immortal.Immortals;
 import com.immortals.Immortal.Spell;
 import com.immortals.Mortal.Mortals;
 import com.immortals.Mortal.Weapons;
+import com.immortals.Mortal.ModComponents;
 import com.immortals.SupplyDrop.SupplyDropEvents;
 import com.immortals.item.ModItems;
 
@@ -35,14 +36,15 @@ public class Main implements ModInitializer {
             throw new RuntimeException("Configuration loading failed", e);
         }
 
-        LOGGER.info("Immortals S3 Mod Loaded");
-
         ModItems.registerModItems();
         Immortals.register();
         Mortals.register();
         Spell.register();
         Weapons.register();
+        ModComponents.OWNER_COMPONENT.toString();
         NullSpace.register();
         SupplyDropEvents.register();
+
+        LOGGER.info("Immortals S3 Mod Loaded");
     }
 }

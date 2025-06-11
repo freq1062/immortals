@@ -50,8 +50,30 @@ public class Mortals {
                         && Utils.getAscended(k);
 
                 // Mortal killed by mortal or natural causes
-                if (!victimImmortal
-                        && (!attackerImmortal || (attacker == null || !(attacker instanceof ServerPlayerEntity)))) {
+                if (!attackerImmortal) {
+                    // If victim is Immortal, scale extra hearts based on corruption
+                    if (victimImmortal) {
+                        int corr = Utils.getCorruption(victim);
+                        System.out.println("Victim Corruption: " + corr);
+                        int heartsToGive = switch (corr) {
+                            case 2 -> 2;
+                            case 3 -> 3;
+                            default -> 1;
+                        };
+
+                        for (int i = 0; i < heartsToGive; i++) {
+                            victim.getWorld().spawnEntity(new ItemEntity(
+                                    victim.getWorld(),
+                                    victim.getX(), victim.getY(), victim.getZ(),
+                                    new ItemStack(ModItems.HEART)));
+                        }
+                    } else {
+                        victim.getWorld().spawnEntity(new ItemEntity(
+                                victim.getWorld(),
+                                victim.getX(), victim.getY(), victim.getZ(),
+                                new ItemStack(ModItems.HEART)));
+                    }
+                    // Check if the victim has no hearts left
                     EntityAttributeInstance mhVic = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                     if (mhVic.getBaseValue() <= 2.0) {
                         // banned ):
@@ -61,28 +83,6 @@ public class Mortals {
                         String command = String.format("tempban %s 0 0 24 %s", playerName, reason);
                         MinecraftServer server = victim.getServer();
                         server.getCommandManager().executeWithPrefix(server.getCommandSource(), command);
-                    }
-
-                    victim.getWorld().spawnEntity(new ItemEntity(
-                            victim.getWorld(),
-                            victim.getX(), victim.getY(), victim.getZ(),
-                            new ItemStack(ModItems.HEART)));
-                }
-
-                // Mortals kill immortals
-                if (victimImmortal && attacker instanceof ServerPlayerEntity && !attackerImmortal) {
-                    int corr = Utils.getCorruption(victim);
-                    int heartsToGive = switch (corr) {
-                        case 2 -> 2;
-                        case 3 -> 3;
-                        default -> 1;
-                    };
-
-                    for (int i = 0; i < heartsToGive; i++) {
-                        victim.getWorld().spawnEntity(new ItemEntity(
-                                victim.getWorld(),
-                                victim.getX(), victim.getY(), victim.getZ(),
-                                new ItemStack(ModItems.HEART)));
                     }
                 }
             }
@@ -215,7 +215,7 @@ public class Mortals {
                             return 0;
                         }
 
-                        if (Utils.hasModifier(mainHand, "immortals:augmented")) {
+                        if (Utils.hasAttribute(mainHand, "immortals:augmented")) {
                             player.sendMessage(Text.literal("This item has already been augmented."), true);
                             return 0; // Or early exit from the method
                         }
@@ -238,6 +238,8 @@ public class Mortals {
                                     entry.getValue(),
                                     EntityAttributeModifier.Operation.ADD_VALUE);
                         }
+                        // Identify who augmented the item
+                        mainHand.set(ModComponents.OWNER_COMPONENT, player.getUuid().toString());
                         Utils.grant(player, "augmenter");
                         player.sendMessage(Text.literal("§aAugmented!"), false);
                         return 1;

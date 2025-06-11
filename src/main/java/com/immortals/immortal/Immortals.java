@@ -1,6 +1,7 @@
 package com.immortals.Immortal;
 
 import com.immortals.Utils;
+import com.immortals.Mortal.ModComponents;
 import com.immortals.api.PlayerImmortalsData;
 import com.immortals.item.ModItems;
 import com.immortals.Main;
@@ -44,7 +45,8 @@ public class Immortals {
 	public static void register() {
 		// AttackEntityCallback for Splinter Blow
 		AttackEntityCallback.EVENT.register((player, world, hand, target, hitResult) -> {
-			if (world.isClient || !(player instanceof ServerPlayerEntity sp) || !Utils.getAscended(sp))
+			if (world.isClient || !(player instanceof ServerPlayerEntity sp) || !Utils.getAscended(sp)
+					|| SpellRegistry.getSlot(sp, SpellRegistry.SPLINTER_BLOW) == -1)
 				return ActionResult.PASS;
 			ServerWorld serverWorld = (ServerWorld) world;
 
@@ -218,12 +220,10 @@ public class Immortals {
 		ServerLivingEntityEvents.AFTER_DEATH.register((ent, src) -> {
 			if (!ent.getWorld().isClient() && ent instanceof ServerPlayerEntity victim) {
 				Entity attacker = src.getAttacker();
-				boolean victimImmortal = Utils.getAscended(victim);
 				boolean attackerImmortal = attacker instanceof ServerPlayerEntity k
 						&& Utils.getAscended(k);
 
-				// Immortal kills or dies
-				if (victimImmortal || attackerImmortal) {
+				if (attackerImmortal) {
 					// Scale the soul shard drop count based on victim's max health
 					int dropCount = 1;
 					double maxHearts = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue() / 2.0;
@@ -328,10 +328,16 @@ public class Immortals {
 
 					stack.decrement(cost);
 					Utils.addCorruption((ServerPlayerEntity) player, 1);
+					// New corruption level
 					int lvl = Utils.getCorruption((ServerPlayerEntity) player);
 					int next = Utils.nextShardCost(lvl);
 					player.sendMessage(Text.literal("§5You grow stronger. Corruption: §l" + lvl + "§r. Next: " + next),
 							true);
+
+					if (lvl == 0) {
+						// Reset health to 10 hearts
+						player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0);
+					}
 
 					if (lvl == 1) {
 						world.playSound(null, player.getX(), player.getY(), player.getZ(),
@@ -421,6 +427,10 @@ public class Immortals {
 					Utils.addCorruption((ServerPlayerEntity) player, 1);
 					int lvl = Utils.getCorruption((ServerPlayerEntity) player);
 					int next = Utils.nextShardCost(lvl);
+					if (lvl == 0) {
+						// Reset health to 10 hearts
+						player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0);
+					}
 					stack.decrement(1);
 					player.sendMessage(Text.literal("§5You feel renewed. Corruption: §l" + lvl + "§r. Next: " + next),
 							true);
@@ -494,6 +504,35 @@ public class Immortals {
 							"You accidentally dropped the Netherite Upgrade Template. (Netherite Upgrades Removed)"),
 							false);
 				}
+
+				// Helper to remove "immortals:augmented" modifiers from a stack if owned by an
+				// ascended player
+				java.util.function.Consumer<ItemStack> removeAugmentedIfAscended = stack -> {
+					if (Utils.hasAttribute(stack, "immortals:augmented")) {
+						String ownerStr = stack.get(ModComponents.OWNER_COMPONENT);
+						if (ownerStr != null) {
+							try {
+								UUID ownerUuid = UUID.fromString(ownerStr);
+								ServerPlayerEntity owner = player.getServer().getPlayerManager().getPlayer(ownerUuid);
+								if (owner != null && Utils.getAscended(owner)) {
+									player.sendMessage(
+											Text.literal("The owner, " + player.getName().getString()
+													+ " of your augmented gear has ascended. (Augmentations removed)"),
+											false);
+									Utils.removeModifierById(stack, "immortals:augmented");
+									stack.remove(ModComponents.OWNER_COMPONENT);
+								}
+							} catch (IllegalArgumentException ignored) {
+								// Invalid UUID string, skip
+							}
+						}
+					}
+				};
+
+				player.getInventory().armor.forEach(removeAugmentedIfAscended);
+				removeAugmentedIfAscended.accept(player.getMainHandStack());
+				removeAugmentedIfAscended.accept(player.getOffHandStack());
+
 				if (Utils.getAscended(player)) {
 					// Apply passive corruption effects
 					if (server.getTicks() % 40 == 0) {

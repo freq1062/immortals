@@ -203,7 +203,7 @@ public class Utils {
         double hx2 = pos.x + (radius - 0.3) * Math.cos(handAngle);
         double hz2 = pos.z + (radius - 0.3) * Math.sin(handAngle);
         double hy = pos.y + 0.12;
-        // Draw the hand as a line (10 particles, use CRIT for visibility)
+        // Draw the hand as a line
         for (int j = 0; j <= 10; j++) {
             double frac = j / 10.0;
             double px = hx1 + (hx2 - hx1) * frac;
@@ -255,19 +255,28 @@ public class Utils {
         itemStack.set(DataComponentTypes.ATTRIBUTE_MODIFIERS, modifierComponent.build());
     }
 
-    public static void clearAllModifiers(ItemStack itemStack) {
-        itemStack.set(DataComponentTypes.ATTRIBUTE_MODIFIERS, AttributeModifiersComponent.builder().build());
+    public static void removeModifierById(ItemStack itemStack, String id) {
+        AttributeModifiersComponent existingComponent = itemStack.get(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (existingComponent == null)
+            return;
+
+        AttributeModifiersComponent.Builder builder = AttributeModifiersComponent.builder();
+        existingComponent.modifiers().forEach(entry -> {
+            if (!id.equals(entry.modifier().id().toString())) {
+                builder.add(entry.attribute(), entry.modifier(), entry.slot());
+            }
+        });
+        itemStack.set(DataComponentTypes.ATTRIBUTE_MODIFIERS, builder.build());
     }
 
-    public static boolean hasModifier(ItemStack itemStack, String id) {
+    public static boolean hasAttribute(ItemStack itemStack, String attributeIdOrModifierId) {
         AttributeModifiersComponent existingComponent = itemStack.get(DataComponentTypes.ATTRIBUTE_MODIFIERS);
         if (existingComponent == null)
             return false;
 
-        System.out.println(existingComponent);
-
         return existingComponent.modifiers().stream()
-                .anyMatch(entry -> id.equals(entry.modifier().id().toString()));
+                .anyMatch(entry -> attributeIdOrModifierId.equals(entry.attribute().getKey().get().toString())
+                        || attributeIdOrModifierId.equals(entry.modifier().id().toString()));
     }
 
     public static void grant(ServerPlayerEntity player, String id) {
