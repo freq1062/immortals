@@ -3,6 +3,8 @@ package com.immortals;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.DamageType;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
@@ -23,14 +25,26 @@ import net.minecraft.advancement.AdvancementProgress;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import com.immortals.api.PlayerImmortalsData;
 import com.immortals.Immortal.Spell;
 
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.Entity;
 
 public class Utils {
+
+    public static final RegistryKey<DamageType> SPELL_DAMAGE_TYPE = RegistryKey.of(RegistryKeys.DAMAGE_TYPE,
+            Identifier.of("immortals", "spell"));
+
+    public static DamageSource of(World world, RegistryKey<DamageType> key, Entity attacker) {
+        return new DamageSource(world.getRegistryManager().getOrThrow(RegistryKeys.DAMAGE_TYPE).getOrThrow(key),
+                attacker);
+    }
+
     // Return true if the player is ascended (immortal), false otherwise
     public static boolean getAscended(ServerPlayerEntity player) {
         PlayerImmortalsData data = (PlayerImmortalsData) player;

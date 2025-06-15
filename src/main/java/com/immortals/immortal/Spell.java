@@ -146,12 +146,6 @@ public class Spell {
                                         SpellRegistry bound = SpellRegistry.getBound(player, slot);
                                         // Refuse if the player doesn't have enough slots and is not replacing a
                                         // non-free spell (dragon ascent and timeslow)
-                                        System.out.println(bound);
-                                        System.out.println(corr + " " + SpellRegistry.getNumBound(player));
-                                        System.out.println((bound == null
-                                                || "dragon_ascent".equals(bound.getId())
-                                                || "timeslow".equals(bound.getId())));
-                                        System.out.println(corr <= SpellRegistry.getNumBound(player));
                                         if (corr <= SpellRegistry.getNumBound(player)
                                                 && (bound == null
                                                         || "dragon_ascent".equals(bound.getId())

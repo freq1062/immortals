@@ -14,7 +14,6 @@ import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.EntityType;
-import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
@@ -38,7 +37,6 @@ import java.util.Map;
 
 /*Implements the Immortals' corruption system.*/
 public class Immortals {
-
 	private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
 	private static final Map<UUID, Integer> splinterCount = new ConcurrentHashMap<>();
 
@@ -62,9 +60,11 @@ public class Immortals {
 			if (count >= 3) {
 				SpellRegistry.tryActivate(sp, SpellRegistry.getSlot(sp, SpellRegistry.SPLINTER_BLOW));
 				if (target instanceof ServerPlayerEntity targetPlayer) {
-					// Deal 2 hearts (4.0f) of magic damage
-					DamageSource ds = serverWorld.getDamageSources().magic();
-					targetPlayer.damage(serverWorld, ds, 6.0f);
+					// 15% of max health damage
+					float damage = (float) (targetPlayer.getMaxHealth()
+							* ((Number) Main.CONFIG.get("splinterBlowDmg")).floatValue());
+					target.damage((ServerWorld) world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) player),
+							damage);
 
 					// Spawn an X of critical particles in front of the player
 					double yaw = Math.toRadians(sp.getYaw());
@@ -351,7 +351,17 @@ public class Immortals {
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
 																		Text.literal(
-																				"Propels you 10 blocks horizontally.\nCooldown 15s.\nRun /bind [slot] dash to use.")))))
+																				"Propels you 10 blocks horizontally.\nCooldown "
+																						+ (Main.CONFIG.get(
+																								"dashCooldown") instanceof Number
+																										? ((Number) Main.CONFIG
+																												.get("dashCooldown"))
+																												.doubleValue()
+																												/ 1000.0
+																										: Main.CONFIG
+																												.get("dashCooldown")
+																												.toString())
+																						+ "s.\nRun /bind [slot] dash to use.")))))
 										.append(Text.literal("§6 and "))
 										.append(
 												Text.literal("§cSplinter Blow")
@@ -359,7 +369,11 @@ public class Immortals {
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
 																		Text.literal(
-																				"Deal 2 extra hearts of damage after a 3-hit combo. \nRun /bind [slot] splinter_blow to use.")))))
+																				"Deal " + ((int) Math
+																						.round(((Number) Main.CONFIG
+																								.get("splinterBlowDmg"))
+																								.doubleValue() * 100))
+																						+ "% of target's max health\nafter a 3-hit combo. \nRun /bind [slot] splinter_blow to use.")))))
 										.append(Text.literal("§6! Hover to see details.")),
 								false);
 					}
@@ -375,7 +389,29 @@ public class Immortals {
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
 																		Text.literal(
-																				"Make all players within 30 blocks glow for 5 seconds.\nCooldown 45s.\nRun /bind [slot] glow to use.")))))
+																				"Make all players within "
+																						+ Main.CONFIG.get("glowRadius")
+																						+ " blocks glow for "
+																						+ ((Main.CONFIG.get(
+																								"glowDuration") instanceof Number)
+																										? ((Number) Main.CONFIG
+																												.get("glowDuration"))
+																												.doubleValue()
+																												/ 1000.0
+																										: Main.CONFIG
+																												.get("glowDuration")
+																												.toString())
+																						+ " seconds.\nCooldown "
+																						+ (Main.CONFIG.get(
+																								"glowCooldown") instanceof Number
+																										? ((Number) Main.CONFIG
+																												.get("glowCooldown"))
+																												.doubleValue()
+																												/ 1000.0
+																										: Main.CONFIG
+																												.get("glowCooldown")
+																												.toString())
+																						+ "s.\nRun /bind [slot] glow to use.")))))
 										.append(Text.literal("§6 and "))
 										.append(
 												Text.literal("§cBackdraft")
@@ -383,7 +419,23 @@ public class Immortals {
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
 																		Text.literal(
-																				"Knock and ignite players while propeling yourself 5 blocks backwards.\nRun /bind [slot] backdraft to use.")))))
+																				"Deal "
+																						+ ((int) Math.round(
+																								((Number) Main.CONFIG
+																										.get("backdraftDmg"))
+																										.doubleValue()
+																										* 100))
+																						+ "% of target's max health while\npropelling yourself 5 blocks backwards.\nCooldown "
+																						+ (Main.CONFIG.get(
+																								"backdraftCooldown") instanceof Number
+																										? ((Number) Main.CONFIG
+																												.get("backdraftCooldown"))
+																												.doubleValue()
+																												/ 1000.0
+																										: Main.CONFIG
+																												.get("backdraftCooldown")
+																												.toString())
+																						+ "s. \nRun /bind [slot] backdraft to use.")))))
 										.append(Text.literal("§6! Hover to see details.")),
 								false);
 					}
@@ -400,7 +452,13 @@ public class Immortals {
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
 																		Text.literal(
-																				"Resistance II for 5s and 3 absorption hearts when below 3 hearts, automatic activation. Cooldown 30s. \nRun /bind [slot] persist to use.")))))
+																				"Resistance II for "
+																						+ Main.CONFIG.get(
+																								"persistResistance")
+																						+ "s and 8 absorption hearts when below 3 hearts.\nCooldown "
+																						+ Main.CONFIG.get(
+																								"persistCooldown")
+																						+ "s. \nRun /bind [slot] persist to use.")))))
 										.append(Text.literal("§6 and "))
 										.append(
 												Text.literal("§cBlackout")
@@ -408,7 +466,16 @@ public class Immortals {
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
 																		Text.literal(
-																				"Apply blindness to non-teammates and invisibility to everybody in a 10 block radius for 7 seconds.\nCooldown 45s.\nRun /bind [slot] blackout to use.")))))
+																				"Apply blindness and invisibility for "
+																						+ Main.CONFIG
+																								.get("blackoutBlind")
+																						+ "s and\nWither II for "
+																						+ Main.CONFIG
+																								.get("blackoutWither")
+																						+ "s to all enemies.\nCooldown "
+																						+ Main.CONFIG
+																								.get("blackoutCooldown")
+																						+ "s.\nRun /bind [slot] blackout to use.")))))
 										.append(Text.literal("§6! Hover to see details.")),
 								false);
 					}

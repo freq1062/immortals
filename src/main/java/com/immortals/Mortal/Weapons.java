@@ -230,7 +230,8 @@ public class Weapons {
 
                 while (blinkCount[0] < blinkDuration) {
                     if (visible[0]) {
-                        System.out.println("Blinking " + blinkCount[0] + visible[0]);
+                        // Visible for 0.25 - 0.5 seconds (5-10 ticks)
+                        int visibleTicks = 5 + rand.nextInt(6); // 5 to 10 ticks
                         Spell.addTask(playerId, () -> {
                             EquipmentVisibility.hide(player);
                             player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
@@ -238,16 +239,19 @@ public class Weapons {
                                     false));
                             player.setInvisible(true);
                         }, blinkCount[0] * 50L);
+                        blinkCount[0] += visibleTicks;
                         visible[0] = false;
                     } else {
+                        // Invisible for 1 - 2 seconds (20-40 ticks)
+                        int invisibleTicks = 20 + rand.nextInt(21); // 20 to 40 ticks
                         Spell.addTask(playerId, () -> {
                             EquipmentVisibility.show(player);
                             player.removeStatusEffect(net.minecraft.entity.effect.StatusEffects.INVISIBILITY);
                             player.setInvisible(false);
                         }, blinkCount[0] * 50L);
+                        blinkCount[0] += invisibleTicks;
                         visible[0] = true;
                     }
-                    blinkCount[0] += 5 + rand.nextInt(15); // 0.25 - 0.75 seconds
                 }
                 // Make sure player is visible at the end
                 Spell.addTask(playerId, () -> {

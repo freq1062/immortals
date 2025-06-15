@@ -4,7 +4,7 @@
       "id": "immortals:timekeeper"
     },
     "title": "Timekeeper",
-    "description": "Harness the power of time to slow down the world around you.",
+    "description": "Acquire the Timekeeper, allowing you to harness the power of time.",
     "show_toast": true,
     "announce_to_chat": true,
     "hidden": false

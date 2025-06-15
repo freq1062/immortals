@@ -7,5 +7,6 @@
     "item.immortals.phasebreaker": "DRK-01 Phasebreaker",
     "item.immortals.timekeeper": "Timekeeper",
     "item.immortals.chronoreaver": "NUL-02 Chronoreaver",
-    "item.immortals.augmentation_core": "Augmentation Core"
+    "item.immortals.augmentation_core": "Augmentation Core",
+    "death.attack.spell": "§c%1$s was killed by %2$s’s spell"
 }

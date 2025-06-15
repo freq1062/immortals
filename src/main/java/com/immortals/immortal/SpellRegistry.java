@@ -8,8 +8,6 @@ import net.minecraft.particle.DustParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.text.Text;
@@ -91,7 +89,8 @@ public enum SpellRegistry {
             // Apply glowing effect to nearby players
             for (ServerPlayerEntity other : world.getPlayers()) {
                 if (!other.equals(player) && other.squaredDistanceTo(player) <= 30 * 30) {
-                    other.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 100, 0, false, false));
+                    other.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING,
+                            20 * (int) Main.CONFIG.get("glowDuration"), 0, false, false));
                 }
             }
 
@@ -99,7 +98,7 @@ public enum SpellRegistry {
             Vec3d center = player.getPos().add(0, player.getStandingEyeHeight() * 0.5, 0);
             DustParticleEffect goldDust = new DustParticleEffect(0xFFD700, 3f);
 
-            int maxRadius = 30;
+            int maxRadius = (int) Main.CONFIG.get("glowRadius");
             double spacing = 2.0; // distance between lattice points
 
             // Compute lattice points only at the edges
@@ -156,8 +155,11 @@ public enum SpellRegistry {
                     Vec3d toOtherNorm = toOther.normalize();
                     double dot = dir.dotProduct(toOtherNorm);
                     if (dot >= fovCos) {
-                        other.damage(world, world.getDamageSources().magic(), 5.0f);
-                        other.setOnFireFor(4);
+                        float maxHealth = other.getMaxHealth();
+                        float damage = maxHealth * ((Number) Main.CONFIG.get("backdraftDmg")).floatValue();
+                        other.damage((ServerWorld) world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) player),
+                                damage);
+                        other.setOnFireFor(20);
                     }
                 }
             }
@@ -188,8 +190,9 @@ public enum SpellRegistry {
     PERSIST("persist", (Integer) Main.CONFIG.get("persistCooldown")) {
         @Override
         public void activate(ServerPlayerEntity player) {
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 100, 1, false, true));
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 20000, 2, false, true));
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE,
+                    20 * (int) Main.CONFIG.get("persistResistance"), 1, false, true));
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 20 * 5 * 60, 3, false, true));
             player.sendMessage(Text.literal("§aYour will strengthens... (+Resistance II)"), true);
         }
     },
@@ -198,22 +201,27 @@ public enum SpellRegistry {
         @Override
         public void activate(ServerPlayerEntity player) {
             ServerWorld world = (ServerWorld) player.getWorld();
-            double radius = 10.0;
-            int duration = 100; // 5 seconds (20 ticks per second)
-            int amplifier = 0;
+            double radius = 15.0;
 
             // Apply blindness to all players within 10 blocks (including self)
             for (ServerPlayerEntity other : world.getPlayers()) {
                 if (other == player) {
                     // Only add invisibility to self
                     other.addStatusEffect(
-                            new StatusEffectInstance(StatusEffects.INVISIBILITY, duration, amplifier, false, true));
+                            new StatusEffectInstance(StatusEffects.INVISIBILITY,
+                                    20 * (int) Main.CONFIG.get("blackoutBlind"), 0, false, true));
                 } else if (other.squaredDistanceTo(player) <= radius * radius) {
                     // Add both blindness and invisibility to others
                     other.addStatusEffect(
-                            new StatusEffectInstance(StatusEffects.BLINDNESS, duration, amplifier, false, true));
+                            new StatusEffectInstance(StatusEffects.BLINDNESS,
+                                    20 * (int) Main.CONFIG.get("blackoutBlind"), 0, false, true));
+                    // 4 hearts of wither damage
                     other.addStatusEffect(
-                            new StatusEffectInstance(StatusEffects.INVISIBILITY, duration, amplifier, false, true));
+                            new StatusEffectInstance(StatusEffects.WITHER, 20 * (int) Main.CONFIG.get("blackoutWither"),
+                                    1, false, true));
+                    other.addStatusEffect(
+                            new StatusEffectInstance(StatusEffects.INVISIBILITY,
+                                    20 * (int) Main.CONFIG.get("blackoutBlind"), 0, false, true));
                 }
             }
 
@@ -283,20 +291,17 @@ public enum SpellRegistry {
 
                 // Spawn 2 lightning bolts, ignores armor
                 Vec3d tpos = t.getPos().add(0, t.getStandingEyeHeight() * 0.5, 0);
-                DamageSource source = world.getDamageSources().create(DamageTypes.MAGIC);
-                Spell.addTask(player.getUuid(), () -> {
-                    t.damage(world, source, 8.0f);
-                    Utils.strikeLightning(world, tpos);
-                }, 1000); // 1
-                          // second
-                          // delay
 
-                Spell.addTask(player.getUuid(), () -> {
-                    t.damage(world, source, 8.0f);
-                    Utils.strikeLightning(world, tpos);
-                }, 2000); // 2
-                          // seconds
-                          // delay
+                // Schedule two lightning strikes with 20% max health damage at 1s and 2s
+                float maxHealth = t.getMaxHealth();
+                float damage = maxHealth * ((Number) Main.CONFIG.get("dragonAscentTotalDmg")).floatValue() / 2.0f;
+                int[] delays = { 1000, 2000 };
+                for (int delay : delays) {
+                    Spell.addTask(player.getUuid(), () -> {
+                        t.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) player), damage);
+                        Utils.strikeLightning(world, tpos);
+                    }, delay);
+                }
             }
             Spell.addTask(player.getUuid(), () -> {
                 Utils.updateRune(player, "dragon_ascent", 0);

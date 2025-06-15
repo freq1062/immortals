@@ -221,15 +221,13 @@ public class Mortals {
                         }
                         // Remove one augmentation core
                         if (slotWithCore == player.getInventory().main.size()) {
-                            // Found in offhand
                             player.getInventory().offHand.get(0).decrement(1);
                         } else {
-                            // Found in main inventory
                             player.getInventory().getStack(slotWithCore).decrement(1);
                         }
                         double numHearts = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH) / 2;
                         for (java.util.AbstractMap.SimpleEntry<RegistryEntry<EntityAttribute>, Float> entry : Augmentation
-                                .rollAttributes(numHearts)) {
+                                .rollAttributes(numHearts, mainHand.getItem())) {
                             Utils.addModifier(
                                     mainHand,
                                     "immortals:augmented",
