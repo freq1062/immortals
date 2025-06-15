@@ -205,13 +205,13 @@ public enum SpellRegistry {
 
             // Apply blindness to all players within 10 blocks (including self)
             for (ServerPlayerEntity other : world.getPlayers()) {
-                if (other == player) {
-                    // Only add invisibility to self
+                if (other == player || other.isTeammate(player)) {
+                    // Only add invisibility to self and teammates
                     other.addStatusEffect(
                             new StatusEffectInstance(StatusEffects.INVISIBILITY,
                                     20 * (int) Main.CONFIG.get("blackoutBlind"), 0, false, true));
                 } else if (other.squaredDistanceTo(player) <= radius * radius) {
-                    // Add both blindness and invisibility to others
+                    // Add blindness, invisibility, and wither effects to enemies
                     other.addStatusEffect(
                             new StatusEffectInstance(StatusEffects.BLINDNESS,
                                     20 * (int) Main.CONFIG.get("blackoutBlind"), 0, false, true));
