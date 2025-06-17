@@ -57,6 +57,9 @@ public class ImmortalsClient implements ClientModInitializer {
   public void onInitializeClient() {
     WorldRenderEvents.AFTER_ENTITIES.register(context -> {
 
+      // Cache UUID->name lookups to avoid repeated expensive calls
+      final Map<UUID, String> ownerNameCache = new ConcurrentHashMap<>();
+
       ItemTooltipCallback.EVENT.register((stack, tooltipContext, tooltipType, lines) -> {
         String uuidStr = stack.getOrDefault(ModComponents.OWNER_COMPONENT, "");
         if (!uuidStr.isEmpty()) {
@@ -65,12 +68,15 @@ public class ImmortalsClient implements ClientModInitializer {
           if (!alreadyPresent) {
             try {
               UUID uuid = UUID.fromString(uuidStr);
-              MinecraftClient client = MinecraftClient.getInstance();
-              String name = null;
-              if (client != null && client.world != null) {
-                PlayerEntity player = client.world.getPlayerByUuid(uuid);
-                if (player != null) {
-                  name = player.getName().getString();
+              String name = ownerNameCache.get(uuid);
+              if (name == null) {
+                MinecraftClient client = MinecraftClient.getInstance();
+                if (client != null && client.world != null) {
+                  PlayerEntity player = client.world.getPlayerByUuid(uuid);
+                  if (player != null) {
+                    name = player.getName().getString();
+                    ownerNameCache.put(uuid, name);
+                  }
                 }
               }
               String display = name != null ? name : uuidStr;
