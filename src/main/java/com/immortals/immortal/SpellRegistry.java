@@ -147,7 +147,7 @@ public enum SpellRegistry {
             double radius = 3.0;
             double fovCos = Math.cos(Math.toRadians(60)); // 60 degree FOV (30 deg each side)
             for (ServerPlayerEntity other : world.getPlayers()) {
-                if (other == player)
+                if (other == player || other.isTeammate(player))
                     continue;
                 Vec3d toOther = other.getPos().subtract(player.getPos());
                 double dist = toOther.length();

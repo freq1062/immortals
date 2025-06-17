@@ -12,7 +12,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -287,16 +287,15 @@ public class Weapons {
                     ent.setVelocity(dir.x * 2.5, 0.5, dir.z * 2.5);
                     ent.velocityModified = true;
 
-                    // Deal 8 HP bypassing armor & magic resistance:
-                    DamageSource ds = ((ServerWorld) world)
-                            .getDamageSources()
-                            .magic();
+                    float maxHealth = (target instanceof LivingEntity le) ? le.getMaxHealth() : 20.0f;
+                    float damage = maxHealth * ((Number) Main.CONFIG.get("fractalTotalDmg")).floatValue() / 4.0f;
                     for (int i = 0; i < 4; i++) {
                         final int index = i;
                         int delay = index * 500;
                         UUID playerId = sp.getUuid();
                         Spell.addTask(playerId, () -> {
-                            ent.damage((ServerWorld) world, ds, 10.0f);
+                            ent.damage((ServerWorld) world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) player),
+                                    damage);
 
                             // Spawn sweep attack particles in front of the entity
                             for (int j = 0; j < 3; j++) {

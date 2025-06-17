@@ -28,6 +28,7 @@ public class ImmortalsConfig {
             java.util.Map.entry("dragonAscentCooldown", 45_000),
             java.util.Map.entry("dragonAscentRadius", 10),
             java.util.Map.entry("dragonAscentTotalDmg", 0.4),
+            java.util.Map.entry("fractalTotalDmg", 0.45),
             java.util.Map.entry("timeSlowDuration", 10_000),
             java.util.Map.entry("timeSlowCooldown", 60_000),
             java.util.Map.entry("timeSlowRadius", 7),

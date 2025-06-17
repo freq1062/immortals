@@ -154,9 +154,16 @@ public class Mortals {
                                 if (!player.getInventory().insertStack(heartShard)) {
                                     player.dropItem(heartShard, false);
                                 }
-
                                 player.sendMessage(Text.literal("Withdrew " + heartsToWithdraw + " hearts."),
                                         false);
+                                if (Utils.inventoryHas(player, ModItems.ASCENSION_TOTEM) != null) {
+                                    player.sendMessage(Text.literal(
+                                            "If you're about to exploit those hearts, just know that this is bannable. You're not slick with this dawg"),
+                                            false);
+                                    System.out.println("Suspicious activity detected: "
+                                            + player.getName().getString()
+                                            + " withdrew hearts while having an ascension totem.");
+                                }
                                 return 1;
                             })));
             // Debug command to set ascendance state

@@ -7,6 +7,7 @@ import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributes;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.item.*;
@@ -16,235 +17,262 @@ public class Augmentation {
         SWORD, AXE, MACE, TRIDENT, TOOL, SHIELD, ARMOR, TOTEM, OTHER
     }
 
-    private static record AttributeRange(RegistryEntry<EntityAttribute> attribute, float min, float max) {
+    // Define attribute object that stores min/max values for each heart level
+    private static class AttributeConfig {
+        private final RegistryEntry<EntityAttribute> attribute;
+        private final Map<Integer, float[]> heartValues = new HashMap<>();
+
+        public AttributeConfig(RegistryEntry<EntityAttribute> attribute) {
+            this.attribute = attribute;
+        }
+
+        // Add values for a specific heart level
+        public AttributeConfig hearts(int hearts, float min, float max) {
+            heartValues.put(hearts, new float[] { min, max });
+            return this;
+        }
+
+        public RegistryEntry<EntityAttribute> getAttribute() {
+            return attribute;
+        }
+
+        public float[] getRange(int hearts) {
+            return heartValues.get(hearts);
+        }
     }
 
-    private static final Map<AugmentItemType, Map<Integer, List<AttributeRange>>> POOLS = new HashMap<>();
+    // Map item types to their attributes
+    private static final Map<AugmentItemType, List<AttributeConfig>> ITEM_ATTRIBUTES = new HashMap<>();
 
     static {
-        // SWORD
-        Map<Integer, List<AttributeRange>> sword = new HashMap<>();
-        sword.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.1f, 0.3f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -2f, -5f),
-                new AttributeRange(EntityAttributes.MOVEMENT_SPEED, 0.005f, 0.01f),
-                new AttributeRange(EntityAttributes.SWEEPING_DAMAGE_RATIO, 0.1f, 0.2f)));
-        sword.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.3f, 0.5f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -5f, -10f),
-                new AttributeRange(EntityAttributes.MOVEMENT_SPEED, 0.01f, 0.02f),
-                new AttributeRange(EntityAttributes.SWEEPING_DAMAGE_RATIO, 0.2f, 0.4f)));
-        sword.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.5f, 0.8f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -10f, -15f),
-                new AttributeRange(EntityAttributes.MOVEMENT_SPEED, 0.02f, 0.03f),
-                new AttributeRange(EntityAttributes.SWEEPING_DAMAGE_RATIO, 0.4f, 0.6f)));
-        sword.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.5f, 1.0f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -15f, -20f),
-                new AttributeRange(EntityAttributes.MOVEMENT_SPEED, 0.03f, 0.05f),
-                new AttributeRange(EntityAttributes.SWEEPING_DAMAGE_RATIO, 0.6f, 0.8f)));
-        POOLS.put(AugmentItemType.SWORD, sword);
+        // SWORD attributes
+        List<AttributeConfig> swordAttrs = new ArrayList<>();
+        swordAttrs.add(new AttributeConfig(EntityAttributes.ATTACK_DAMAGE)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.5f, 1.0f));
 
-        // AXE
-        Map<Integer, List<AttributeRange>> axe = new HashMap<>();
-        axe.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.1f, 0.3f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -2f, -4f),
-                new AttributeRange(EntityAttributes.MOVEMENT_EFFICIENCY, 0.01f, 0.03f),
-                new AttributeRange(EntityAttributes.SAFE_FALL_DISTANCE, 1f, 2f)));
-        axe.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.3f, 0.5f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -4f, -8f),
-                new AttributeRange(EntityAttributes.MOVEMENT_EFFICIENCY, 0.03f, 0.05f),
-                new AttributeRange(EntityAttributes.SAFE_FALL_DISTANCE, 3f, 5f)));
-        axe.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.5f, 0.8f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -8f, -12f),
-                new AttributeRange(EntityAttributes.MOVEMENT_EFFICIENCY, 0.05f, 0.08f),
-                new AttributeRange(EntityAttributes.SAFE_FALL_DISTANCE, 5f, 7f)));
-        axe.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.8f, 1.0f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -12f, -16f),
-                new AttributeRange(EntityAttributes.MOVEMENT_EFFICIENCY, 0.08f, 0.1f),
-                new AttributeRange(EntityAttributes.SAFE_FALL_DISTANCE, 7f, 10f)));
-        POOLS.put(AugmentItemType.AXE, axe);
+        swordAttrs.add(new AttributeConfig(EntityAttributes.FOLLOW_RANGE)
+                .hearts(10, -2f, -5f)
+                .hearts(14, -3f, -6f)
+                .hearts(18, -5f, -7f)
+                .hearts(20, -6f, -8f));
 
-        // MACE
-        Map<Integer, List<AttributeRange>> mace = new HashMap<>();
-        mace.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.JUMP_STRENGTH, 0.033f, 0.1f),
-                new AttributeRange(EntityAttributes.MOVEMENT_SPEED, 0.005f, 0.01f)));
-        mace.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.JUMP_STRENGTH, 0.1f, 0.167f),
-                new AttributeRange(EntityAttributes.MOVEMENT_SPEED, 0.01f, 0.015f)));
-        mace.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.JUMP_STRENGTH, 0.167f, 0.233f),
-                new AttributeRange(EntityAttributes.MOVEMENT_SPEED, 0.015f, 0.025f)));
-        mace.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.JUMP_STRENGTH, 0.233f, 0.3f),
-                new AttributeRange(EntityAttributes.MOVEMENT_SPEED, 0.025f, 0.035f)));
-        POOLS.put(AugmentItemType.MACE, mace);
+        swordAttrs.add(new AttributeConfig(EntityAttributes.MOVEMENT_SPEED)
+                .hearts(10, 0.005f, 0.003f)
+                .hearts(14, 0.002f, 0.005f)
+                .hearts(18, 0.005f, 0.008f)
+                .hearts(20, 0.006f, 0.01f));
 
-        // TRIDENT
-        Map<Integer, List<AttributeRange>> trident = new HashMap<>();
-        trident.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.1f, 0.3f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 2.5f, 5f),
-                new AttributeRange(EntityAttributes.LUCK, 0.1f, 0.3f),
-                new AttributeRange(EntityAttributes.SUBMERGED_MINING_SPEED, 1.1f, 1.2f),
-                new AttributeRange(EntityAttributes.WATER_MOVEMENT_EFFICIENCY, 1.1f, 1.2f)));
-        trident.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.3f, 0.5f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 5f, 10f),
-                new AttributeRange(EntityAttributes.LUCK, 0.3f, 0.5f),
-                new AttributeRange(EntityAttributes.SUBMERGED_MINING_SPEED, 1.2f, 1.4f),
-                new AttributeRange(EntityAttributes.WATER_MOVEMENT_EFFICIENCY, 1.2f, 1.4f)));
-        trident.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.5f, 0.8f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 10f, 15f),
-                new AttributeRange(EntityAttributes.LUCK, 0.5f, 0.8f),
-                new AttributeRange(EntityAttributes.SUBMERGED_MINING_SPEED, 1.4f, 1.6f),
-                new AttributeRange(EntityAttributes.WATER_MOVEMENT_EFFICIENCY, 1.4f, 1.6f)));
-        trident.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.8f, 1.0f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 15f, 20f),
-                new AttributeRange(EntityAttributes.LUCK, 0.8f, 1.0f),
-                new AttributeRange(EntityAttributes.SUBMERGED_MINING_SPEED, 1.6f, 1.8f),
-                new AttributeRange(EntityAttributes.WATER_MOVEMENT_EFFICIENCY, 1.6f, 1.8f)));
-        POOLS.put(AugmentItemType.TRIDENT, trident);
+        swordAttrs.add(new AttributeConfig(EntityAttributes.SWEEPING_DAMAGE_RATIO)
+                .hearts(10, 0.01f, 0.1f)
+                .hearts(14, 0.1f, 0.2f)
+                .hearts(18, 0.2f, 0.3f)
+                .hearts(20, 0.3f, 0.4f));
 
-        // TOOL (Shovel/Pickaxe/Hoe/Shears)
-        Map<Integer, List<AttributeRange>> tool = new HashMap<>();
-        tool.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_KNOCKBACK, 0.1f, 0.3f),
-                new AttributeRange(EntityAttributes.BLOCK_BREAK_SPEED, 0.2f, 0.4f),
-                new AttributeRange(EntityAttributes.MINING_EFFICIENCY, 1.1f, 1.2f),
-                new AttributeRange(EntityAttributes.LUCK, 0.1f, 0.3f),
-                new AttributeRange(EntityAttributes.SUBMERGED_MINING_SPEED, 1.1f, 1.2f)));
-        tool.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_KNOCKBACK, 0.3f, 0.5f),
-                new AttributeRange(EntityAttributes.BLOCK_BREAK_SPEED, 0.4f, 0.7f),
-                new AttributeRange(EntityAttributes.MINING_EFFICIENCY, 1.2f, 1.4f),
-                new AttributeRange(EntityAttributes.LUCK, 0.3f, 0.5f),
-                new AttributeRange(EntityAttributes.SUBMERGED_MINING_SPEED, 1.2f, 1.4f)));
-        tool.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_KNOCKBACK, 0.5f, 0.8f),
-                new AttributeRange(EntityAttributes.BLOCK_BREAK_SPEED, 0.7f, 1.0f),
-                new AttributeRange(EntityAttributes.MINING_EFFICIENCY, 1.4f, 1.6f),
-                new AttributeRange(EntityAttributes.LUCK, 0.5f, 0.8f),
-                new AttributeRange(EntityAttributes.SUBMERGED_MINING_SPEED, 1.4f, 1.6f)));
-        tool.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_KNOCKBACK, 0.8f, 1.0f),
-                new AttributeRange(EntityAttributes.BLOCK_BREAK_SPEED, 1.0f, 1.2f),
-                new AttributeRange(EntityAttributes.MINING_EFFICIENCY, 1.6f, 1.8f),
-                new AttributeRange(EntityAttributes.LUCK, 0.8f, 1.0f),
-                new AttributeRange(EntityAttributes.SUBMERGED_MINING_SPEED, 1.6f, 1.8f)));
-        POOLS.put(AugmentItemType.TOOL, tool);
+        ITEM_ATTRIBUTES.put(AugmentItemType.SWORD, swordAttrs);
 
-        // SHIELD
-        Map<Integer, List<AttributeRange>> shield = new HashMap<>();
-        shield.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.1f, 0.3f),
-                new AttributeRange(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.01f, 0.02f),
-                new AttributeRange(EntityAttributes.SNEAKING_SPEED, 1.05f, 1.05f)));
-        shield.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.3f, 0.5f),
-                new AttributeRange(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.02f, 0.04f),
-                new AttributeRange(EntityAttributes.SNEAKING_SPEED, 1.1f, 1.1f)));
-        shield.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.5f, 0.7f),
-                new AttributeRange(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.04f, 0.06f),
-                new AttributeRange(EntityAttributes.SNEAKING_SPEED, 1.2f, 1.2f)));
-        shield.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.ATTACK_DAMAGE, 0.7f, 0.9f),
-                new AttributeRange(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.06f, 0.08f),
-                new AttributeRange(EntityAttributes.SNEAKING_SPEED, 1.3f, 1.3f)));
-        POOLS.put(AugmentItemType.SHIELD, shield);
+        // AXE attributes
+        List<AttributeConfig> axeAttrs = new ArrayList<>();
+        axeAttrs.add(new AttributeConfig(EntityAttributes.ATTACK_DAMAGE)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.8f, 1.0f));
 
-        // ARMOR/ELYTRA
-        Map<Integer, List<AttributeRange>> armor = new HashMap<>();
-        armor.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.ARMOR_TOUGHNESS, 0.25f, 0.5f),
-                new AttributeRange(EntityAttributes.BURNING_TIME, -0.1f, -0.2f),
-                new AttributeRange(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.01f, 0.02f),
-                new AttributeRange(EntityAttributes.FALL_DAMAGE_MULTIPLIER, 1.1f, 1.05f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 2.5f, 2.5f)));
-        armor.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.ARMOR_TOUGHNESS, 0.5f, 0.75f),
-                new AttributeRange(EntityAttributes.BURNING_TIME, -0.3f, -0.4f),
-                new AttributeRange(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.02f, 0.03f),
-                new AttributeRange(EntityAttributes.FALL_DAMAGE_MULTIPLIER, 1.2f, 1.2f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 5f, 5f)));
-        armor.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.ARMOR_TOUGHNESS, 0.75f, 1.0f),
-                new AttributeRange(EntityAttributes.BURNING_TIME, -0.5f, -0.6f),
-                new AttributeRange(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.03f, 0.05f),
-                new AttributeRange(EntityAttributes.FALL_DAMAGE_MULTIPLIER, 1.3f, 1.3f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 7.5f, 7.5f)));
-        armor.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.ARMOR_TOUGHNESS, 1.0f, 1.25f),
-                new AttributeRange(EntityAttributes.BURNING_TIME, -0.7f, -0.8f),
-                new AttributeRange(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.05f, 0.07f),
-                new AttributeRange(EntityAttributes.FALL_DAMAGE_MULTIPLIER, 1.5f, 1.5f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 10f, 10f)));
-        POOLS.put(AugmentItemType.ARMOR, armor);
+        axeAttrs.add(new AttributeConfig(EntityAttributes.FOLLOW_RANGE)
+                .hearts(10, -2f, -5f)
+                .hearts(14, -3f, -6f)
+                .hearts(18, -5f, -7f)
+                .hearts(20, -6f, -8f));
 
-        // TOTEM
-        Map<Integer, List<AttributeRange>> totem = new HashMap<>();
-        totem.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.ARMOR_TOUGHNESS, 0.25f, 0.5f),
-                new AttributeRange(EntityAttributes.KNOCKBACK_RESISTANCE, 0.01f, 0.02f),
-                new AttributeRange(EntityAttributes.LUCK, 0.1f, 0.3f)));
-        totem.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.ARMOR_TOUGHNESS, 0.5f, 0.75f),
-                new AttributeRange(EntityAttributes.KNOCKBACK_RESISTANCE, 0.02f, 0.03f),
-                new AttributeRange(EntityAttributes.LUCK, 0.3f, 0.5f)));
-        totem.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.ARMOR_TOUGHNESS, 0.75f, 1.0f),
-                new AttributeRange(EntityAttributes.KNOCKBACK_RESISTANCE, 0.03f, 0.04f),
-                new AttributeRange(EntityAttributes.LUCK, 0.5f, 0.8f)));
-        totem.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.ARMOR_TOUGHNESS, 1.0f, 1.25f),
-                new AttributeRange(EntityAttributes.KNOCKBACK_RESISTANCE, 0.04f, 0.05f),
-                new AttributeRange(EntityAttributes.LUCK, 0.8f, 1.0f)));
-        POOLS.put(AugmentItemType.TOTEM, totem);
+        axeAttrs.add(new AttributeConfig(EntityAttributes.MOVEMENT_EFFICIENCY)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.7f)
+                .hearts(20, 0.7f, 1f));
 
-        // OTHER
-        Map<Integer, List<AttributeRange>> other = new HashMap<>();
-        other.put(10, Arrays.asList(
-                new AttributeRange(EntityAttributes.BURNING_TIME, -0.1f, -0.1f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -2f, -4f),
-                new AttributeRange(EntityAttributes.LUCK, 0.1f, 0.3f),
-                new AttributeRange(EntityAttributes.MOVEMENT_EFFICIENCY, 1.05f, 1.1f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 2.5f, 5f),
-                new AttributeRange(EntityAttributes.TEMPT_RANGE, 1f, 3f),
-                new AttributeRange(EntityAttributes.KNOCKBACK_RESISTANCE, 0.01f, 0.02f)));
-        other.put(14, Arrays.asList(
-                new AttributeRange(EntityAttributes.BURNING_TIME, -0.2f, -0.2f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -4f, -6f),
-                new AttributeRange(EntityAttributes.LUCK, 0.3f, 0.5f),
-                new AttributeRange(EntityAttributes.MOVEMENT_EFFICIENCY, 1.1f, 1.2f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 5f, 7.5f),
-                new AttributeRange(EntityAttributes.TEMPT_RANGE, 3f, 5f),
-                new AttributeRange(EntityAttributes.KNOCKBACK_RESISTANCE, 0.02f, 0.03f)));
-        other.put(18, Arrays.asList(
-                new AttributeRange(EntityAttributes.BURNING_TIME, -0.4f, -0.4f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -6f, -8f),
-                new AttributeRange(EntityAttributes.LUCK, 0.5f, 0.8f),
-                new AttributeRange(EntityAttributes.MOVEMENT_EFFICIENCY, 1.2f, 1.3f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 7.5f, 10f),
-                new AttributeRange(EntityAttributes.TEMPT_RANGE, 5f, 7f),
-                new AttributeRange(EntityAttributes.KNOCKBACK_RESISTANCE, 0.03f, 0.04f)));
-        other.put(20, Arrays.asList(
-                new AttributeRange(EntityAttributes.BURNING_TIME, -0.6f, -0.6f),
-                new AttributeRange(EntityAttributes.FOLLOW_RANGE, -8f, -10f),
-                new AttributeRange(EntityAttributes.LUCK, 0.8f, 1.0f),
-                new AttributeRange(EntityAttributes.MOVEMENT_EFFICIENCY, 1.3f, 1.5f),
-                new AttributeRange(EntityAttributes.OXYGEN_BONUS, 10f, 12.5f),
-                new AttributeRange(EntityAttributes.TEMPT_RANGE, 7f, 10f),
-                new AttributeRange(EntityAttributes.KNOCKBACK_RESISTANCE, 0.04f, 0.05f)));
-        POOLS.put(AugmentItemType.OTHER, other);
+        axeAttrs.add(new AttributeConfig(EntityAttributes.SAFE_FALL_DISTANCE)
+                .hearts(10, 0.5f, 0.5f)
+                .hearts(14, 1f, 1f)
+                .hearts(18, 2f, 2f)
+                .hearts(20, 3f, 3f));
+
+        ITEM_ATTRIBUTES.put(AugmentItemType.AXE, axeAttrs);
+
+        // MACE attributes
+        List<AttributeConfig> maceAttrs = new ArrayList<>();
+        maceAttrs.add(new AttributeConfig(EntityAttributes.JUMP_STRENGTH)
+                .hearts(10, 0.01f, 0.03f)
+                .hearts(14, 0.03f, 0.05f)
+                .hearts(18, 0.05f, 0.1f)
+                .hearts(20, 0.08f, 0.15f));
+        maceAttrs.add(new AttributeConfig(EntityAttributes.MOVEMENT_SPEED)
+                .hearts(10, 0.005f, 0.003f)
+                .hearts(14, 0.002f, 0.005f)
+                .hearts(18, 0.005f, 0.008f)
+                .hearts(20, 0.006f, 0.01f));
+        ITEM_ATTRIBUTES.put(AugmentItemType.MACE, maceAttrs);
+
+        // TRIDENT attributes
+        List<AttributeConfig> tridentAttrs = new ArrayList<>();
+        tridentAttrs.add(new AttributeConfig(EntityAttributes.ATTACK_DAMAGE)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.8f, 1.0f));
+        tridentAttrs.add(new AttributeConfig(EntityAttributes.OXYGEN_BONUS)
+                .hearts(10, 1f, 2f)
+                .hearts(14, 2f, 4f)
+                .hearts(18, 3f, 5f)
+                .hearts(20, 4f, 6f));
+        tridentAttrs.add(new AttributeConfig(EntityAttributes.LUCK)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.8f, 1.0f));
+        tridentAttrs.add(new AttributeConfig(EntityAttributes.SUBMERGED_MINING_SPEED)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.7f)
+                .hearts(20, 0.7f, 1f));
+        tridentAttrs.add(new AttributeConfig(EntityAttributes.WATER_MOVEMENT_EFFICIENCY)
+                .hearts(10, 0.05f, 0.1f)
+                .hearts(14, 0.1f, 0.2f)
+                .hearts(18, 0.2f, 0.4f)
+                .hearts(20, 0.3f, 0.5f));
+        ITEM_ATTRIBUTES.put(AugmentItemType.TRIDENT, tridentAttrs);
+
+        // TOOL attributes (Shovel/Pickaxe/Hoe/Shears)
+        List<AttributeConfig> toolAttrs = new ArrayList<>();
+        toolAttrs.add(new AttributeConfig(EntityAttributes.ATTACK_KNOCKBACK)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.8f, 1.0f));
+        toolAttrs.add(new AttributeConfig(EntityAttributes.BLOCK_BREAK_SPEED)
+                .hearts(10, 0.05f, 0.1f)
+                .hearts(14, 0.1f, 0.2f)
+                .hearts(18, 0.2f, 0.3f)
+                .hearts(20, 0.2f, 0.4f));
+        toolAttrs.add(new AttributeConfig(EntityAttributes.MINING_EFFICIENCY)
+                .hearts(10, 0.05f, 0.1f)
+                .hearts(14, 0.1f, 0.2f)
+                .hearts(18, 0.2f, 0.3f)
+                .hearts(20, 0.2f, 0.4f));
+        toolAttrs.add(new AttributeConfig(EntityAttributes.LUCK)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.8f, 1.0f));
+        toolAttrs.add(new AttributeConfig(EntityAttributes.SUBMERGED_MINING_SPEED)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.7f)
+                .hearts(20, 0.7f, 1f));
+        ITEM_ATTRIBUTES.put(AugmentItemType.TOOL, toolAttrs);
+
+        // SHIELD attributes
+        List<AttributeConfig> shieldAttrs = new ArrayList<>();
+        shieldAttrs.add(new AttributeConfig(EntityAttributes.ATTACK_DAMAGE)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.5f, 1.0f));
+        shieldAttrs.add(new AttributeConfig(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE)
+                .hearts(10, 0.01f, 0.02f)
+                .hearts(14, 0.02f, 0.04f)
+                .hearts(18, 0.04f, 0.06f)
+                .hearts(20, 0.06f, 0.08f));
+        shieldAttrs.add(new AttributeConfig(EntityAttributes.SNEAKING_SPEED)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.2f, 0.4f)
+                .hearts(18, 0.3f, 0.5f)
+                .hearts(20, 0.4f, 0.6f));
+        ITEM_ATTRIBUTES.put(AugmentItemType.SHIELD, shieldAttrs);
+
+        // ARMOR/ELYTRA attributes
+        List<AttributeConfig> armorAttrs = new ArrayList<>();
+        armorAttrs.add(new AttributeConfig(EntityAttributes.ARMOR_TOUGHNESS)
+                .hearts(10, 0.5f, 1f)
+                .hearts(14, 1f, 2f)
+                .hearts(18, 1f, 3f)
+                .hearts(20, 2f, 4f));
+        armorAttrs.add(new AttributeConfig(EntityAttributes.BURNING_TIME)
+                .hearts(10, -0.1f, -0.2f)
+                .hearts(14, -0.2f, -0.3f)
+                .hearts(18, -0.3f, -0.4f)
+                .hearts(20, -0.4f, -0.5f));
+        armorAttrs.add(new AttributeConfig(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE)
+                .hearts(10, 0.01f, 0.02f)
+                .hearts(14, 0.02f, 0.03f)
+                .hearts(18, 0.03f, 0.05f)
+                .hearts(20, 0.05f, 0.07f));
+        armorAttrs.add(new AttributeConfig(EntityAttributes.FALL_DAMAGE_MULTIPLIER)
+                .hearts(10, -0.05f, -0.1f)
+                .hearts(14, -0.1f, -0.2f)
+                .hearts(18, -0.2f, -0.3f)
+                .hearts(20, -0.2f, -0.4f));
+        armorAttrs.add(new AttributeConfig(EntityAttributes.OXYGEN_BONUS)
+                .hearts(10, 1f, 2f)
+                .hearts(14, 2f, 4f)
+                .hearts(18, 3f, 5f)
+                .hearts(20, 4f, 6f));
+        ITEM_ATTRIBUTES.put(AugmentItemType.ARMOR, armorAttrs);
+
+        // TOTEM attributes
+        List<AttributeConfig> totemAttrs = new ArrayList<>();
+        totemAttrs.add(new AttributeConfig(EntityAttributes.ARMOR_TOUGHNESS)
+                .hearts(10, 0.5f, 1f)
+                .hearts(14, 1f, 2f)
+                .hearts(18, 1f, 3f)
+                .hearts(20, 2f, 4f));
+        totemAttrs.add(new AttributeConfig(EntityAttributes.KNOCKBACK_RESISTANCE)
+                .hearts(10, 0.01f, 0.02f)
+                .hearts(14, 0.02f, 0.03f)
+                .hearts(18, 0.03f, 0.04f)
+                .hearts(20, 0.04f, 0.05f));
+        totemAttrs.add(new AttributeConfig(EntityAttributes.LUCK)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.8f, 1.0f));
+        ITEM_ATTRIBUTES.put(AugmentItemType.TOTEM, totemAttrs);
+
+        // OTHER attributes
+        List<AttributeConfig> otherAttrs = new ArrayList<>();
+        otherAttrs.add(new AttributeConfig(EntityAttributes.BURNING_TIME)
+                .hearts(10, -0.1f, -0.2f)
+                .hearts(14, -0.2f, -0.3f)
+                .hearts(18, -0.3f, -0.4f)
+                .hearts(20, -0.4f, -0.5f));
+        otherAttrs.add(new AttributeConfig(EntityAttributes.FOLLOW_RANGE)
+                .hearts(10, -2f, -5f)
+                .hearts(14, -3f, -6f)
+                .hearts(18, -5f, -7f)
+                .hearts(20, -6f, -8f));
+        otherAttrs.add(new AttributeConfig(EntityAttributes.LUCK)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.8f)
+                .hearts(20, 0.8f, 1.0f));
+        otherAttrs.add(new AttributeConfig(EntityAttributes.MOVEMENT_EFFICIENCY)
+                .hearts(10, 0.1f, 0.3f)
+                .hearts(14, 0.3f, 0.5f)
+                .hearts(18, 0.5f, 0.7f)
+                .hearts(20, 0.7f, 1f));
+        otherAttrs.add(new AttributeConfig(EntityAttributes.OXYGEN_BONUS)
+                .hearts(10, 1f, 2f)
+                .hearts(14, 2f, 4f)
+                .hearts(18, 3f, 5f)
+                .hearts(20, 4f, 6f));
+        otherAttrs.add(new AttributeConfig(EntityAttributes.KNOCKBACK_RESISTANCE)
+                .hearts(10, 0.01f, 0.02f)
+                .hearts(14, 0.02f, 0.03f)
+                .hearts(18, 0.03f, 0.04f)
+                .hearts(20, 0.04f, 0.05f));
+        ITEM_ATTRIBUTES.put(AugmentItemType.OTHER, otherAttrs);
     }
 
     private static final Random RANDOM = new Random();
@@ -291,32 +319,39 @@ public class Augmentation {
 
         AugmentItemType type = getItemType(item);
 
-        int key;
+        // Determine heart level
+        int heartLevel;
         if (numHearts <= 10)
-            key = 10;
+            heartLevel = 10;
         else if (numHearts <= 14)
-            key = 14;
+            heartLevel = 14;
         else if (numHearts <= 18)
-            key = 18;
+            heartLevel = 18;
         else
-            key = 20;
+            heartLevel = 20;
 
-        List<AttributeRange> pool = POOLS.getOrDefault(type, POOLS.get(AugmentItemType.OTHER)).get(key);
-        if (pool == null || pool.size() < 2)
+        // Get available attributes for this item type, or OTHER if not found
+        List<AttributeConfig> attributes = ITEM_ATTRIBUTES.getOrDefault(type,
+                ITEM_ATTRIBUTES.get(AugmentItemType.OTHER));
+
+        if (attributes == null || attributes.size() < 2)
             return List.of();
 
-        int firstIdx = RANDOM.nextInt(pool.size());
+        // Select two random attributes
+        int firstIdx = RANDOM.nextInt(attributes.size());
         int secondIdx;
         do {
-            secondIdx = RANDOM.nextInt(pool.size());
+            secondIdx = RANDOM.nextInt(attributes.size());
         } while (secondIdx == firstIdx);
 
-        List<AttributeRange> selectedRanges = Arrays.asList(pool.get(firstIdx), pool.get(secondIdx));
+        List<AttributeConfig> selected = Arrays.asList(attributes.get(firstIdx), attributes.get(secondIdx));
 
-        return selectedRanges.stream()
-                .map(range -> {
-                    float value = range.min + RANDOM.nextFloat() * (range.max - range.min);
-                    return new AbstractMap.SimpleEntry<>(range.attribute(), value);
+        // Generate random values within the specified ranges
+        return selected.stream()
+                .map(config -> {
+                    float[] range = config.getRange(heartLevel);
+                    float value = range[0] + RANDOM.nextFloat() * (range[1] - range[0]);
+                    return new AbstractMap.SimpleEntry<>(config.getAttribute(), value);
                 })
                 .toList();
     }
