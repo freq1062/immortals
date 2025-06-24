@@ -34,8 +34,10 @@ public class Weapons {
     private static final Map<UUID, Integer> fractalCount = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> PHASE_CHANGE_COOLDOWNS = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> OVERCLOCK_COOLDOWNS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Long> BLINK_COOLDOWNS = new ConcurrentHashMap<>();
     private static final long PHASE_CHANGE_COOLDOWN_MS = (Integer) Main.CONFIG.get("phaseChangeCooldown");
     private static final long OVERCLOCK_COOLDOWN_MS = (Integer) Main.CONFIG.get("overclockCooldown");
+    private static final long BLINK_COOLDOWN_MS = (Integer) Main.CONFIG.get("blinkCooldown");
 
     public static void register() {
         UseItemCallback.EVENT.register((player, world, hand) -> {
@@ -219,46 +221,50 @@ public class Weapons {
             // Only trigger if health just dropped below 5 hearts (10 HP)
             float newHealth = entity.getHealth();
             float oldHealth = newHealth + damageTaken;
-            if (oldHealth >= 10.0f && newHealth < 10.0f) {
-                int blinkDuration = (Integer) Main.CONFIG.get("blinkDuration") / 50; // 100 * 50 = 5 seconds
+            final UUID playerId = player.getUuid();
+            long now = System.currentTimeMillis();
+            Long last = BLINK_COOLDOWNS.get(playerId);
+            if ((last == null || now - last >= BLINK_COOLDOWN_MS) && oldHealth >= 10.0f && newHealth < 10.0f) {
+                int blinkDuration = (Integer) Main.CONFIG.get("blinkDuration") / 50; // in ticks
+                player.sendMessage(Text.literal("§bBlink Activated!"), true);
 
-                // Use scheduled tasks instead of Thread.sleep to avoid freezing the server
-                final int[] blinkCount = { 0 };
-                final boolean[] visible = { true };
-                final UUID playerId = player.getUuid();
-                java.util.Random rand = new java.util.Random();
+                // Show glow ink particle rings every 0.5s
+                for (int t = 0; t < blinkDuration; t += 10) {
+                    Spell.addTask(playerId, () -> {
+                        EquipmentVisibility.hide(player);
+                        player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                                net.minecraft.entity.effect.StatusEffects.INVISIBILITY, blinkDuration, 0, false, false,
+                                false));
+                        player.setInvisible(true);
 
-                while (blinkCount[0] < blinkDuration) {
-                    if (visible[0]) {
-                        // Visible for 0.25 - 0.5 seconds (5-10 ticks)
-                        int visibleTicks = 5 + rand.nextInt(6); // 5 to 10 ticks
-                        Spell.addTask(playerId, () -> {
-                            EquipmentVisibility.hide(player);
-                            player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                                    net.minecraft.entity.effect.StatusEffects.INVISIBILITY, 100, 0, false, false,
-                                    false));
-                            player.setInvisible(true);
-                        }, blinkCount[0] * 50L);
-                        blinkCount[0] += visibleTicks;
-                        visible[0] = false;
-                    } else {
-                        // Invisible for 1 - 2 seconds (20-40 ticks)
-                        int invisibleTicks = 20 + rand.nextInt(21); // 20 to 40 ticks
-                        Spell.addTask(playerId, () -> {
-                            EquipmentVisibility.show(player);
-                            player.removeStatusEffect(net.minecraft.entity.effect.StatusEffects.INVISIBILITY);
-                            player.setInvisible(false);
-                        }, blinkCount[0] * 50L);
-                        blinkCount[0] += invisibleTicks;
-                        visible[0] = true;
-                    }
+                        Vec3d pos = player.getPos();
+                        double height = player.getHeight();
+                        double width = player.getWidth();
+                        int points = 6;
+                        for (int i = 0; i < points; i++) {
+                            double y = pos.y + 0.1 + (height - 0.2) * i / (points - 1);
+                            int ringPoints = 8;
+                            for (int j = 0; j < ringPoints; j++) {
+                                double angle = 2 * Math.PI * j / ringPoints;
+                                double dx = Math.cos(angle) * width * 0.3;
+                                double dz = Math.sin(angle) * width * 0.3;
+                                ((ServerWorld) player.getWorld()).spawnParticles(
+                                        ParticleTypes.GLOW,
+                                        pos.x + dx, y, pos.z + dz,
+                                        1, 0, 0, 0, 0.0);
+                            }
+                        }
+                    }, t * 50L);
                 }
-                // Make sure player is visible at the end
+
+                // Restore visibility at the end
                 Spell.addTask(playerId, () -> {
+                    BLINK_COOLDOWNS.put(playerId, System.currentTimeMillis());
+                    player.sendMessage(Text.literal("§bBlink Recharging!"), true);
                     EquipmentVisibility.show(player);
                     player.removeStatusEffect(net.minecraft.entity.effect.StatusEffects.INVISIBILITY);
                     player.setInvisible(false);
-                }, blinkCount[0] * 50L);
+                }, blinkDuration * 50L);
             }
         });
 
@@ -372,6 +378,31 @@ public class Weapons {
                     player.sendMessage(Text.literal("§aOverclock ready!"), true);
                     // Remove entry to prevent further messages
                     OVERCLOCK_COOLDOWNS.remove(id);
+                }
+            }
+        });
+
+        // Display cooldown messages for Blink
+        ServerTickEvents.START_SERVER_TICK.register(server -> {
+            if (server.getTicks() % 20 != 0)
+                return;
+
+            long now = System.currentTimeMillis();
+            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                UUID id = player.getUuid();
+                Long last = BLINK_COOLDOWNS.get(id);
+
+                // Only show if holding Chronoreaver
+                if (last == null || player.getMainHandStack().getItem() != ModItems.CHRONOREAVER)
+                    continue;
+
+                long elapsed = now - last;
+                long remainingMs = BLINK_COOLDOWN_MS - elapsed;
+
+                if (remainingMs <= 0) {
+                    player.sendMessage(Text.literal("§bBlink ready!"), true);
+                    // Remove entry to prevent further messages
+                    BLINK_COOLDOWNS.remove(id);
                 }
             }
         });

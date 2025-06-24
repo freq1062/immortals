@@ -267,7 +267,8 @@ public enum SpellRegistry {
             // Propel player into the air
             player.setVelocity(player.getVelocity().x, 1.3, player.getVelocity().z);
             player.velocityModified = true;
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.LEVITATION, 60, 0, false, false));
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.LEVITATION,
+                    (Integer) Main.CONFIG.get("dragonAscentLevitation") * 20, 0, false, false));
 
             ServerWorld world = (ServerWorld) player.getWorld();
             double radius = (Integer) Main.CONFIG.get("dragonAscentRadius"); // detection range
@@ -614,7 +615,30 @@ public enum SpellRegistry {
         }
 
         spell.activate(player);
-        recordUse(player, spell);
+        // Wait for effects to wear off before starting cooldown
+        if (spell == PERSIST) {
+            Spell.addTask(player.getUuid(), () -> {
+                recordUse(player, spell);
+            }, (int) Main.CONFIG.get("persistResistance") * 1000);
+        } else if (spell == BLACKOUT) {
+            Spell.addTask(player.getUuid(), () -> {
+                recordUse(player, spell);
+            }, (int) Main.CONFIG.get("blackoutBlind") * 1000);
+        } else if (spell == GLOW) {
+            Spell.addTask(player.getUuid(), () -> {
+                recordUse(player, spell);
+            }, (int) Main.CONFIG.get("glowDuration") * 1000);
+        } else if (spell == DRAGON_ASCENT) {
+            Spell.addTask(player.getUuid(), () -> {
+                recordUse(player, spell);
+            }, (int) Main.CONFIG.get("dragonAscentLevitation") * 1000);
+        } else if (spell == TIMESLOW) {
+            Spell.addTask(player.getUuid(), () -> {
+                recordUse(player, spell);
+            }, (int) Main.CONFIG.get("timeSlowDuration") * 1000);
+        } else {
+            recordUse(player, spell);
+        }
         return true;
     }
 

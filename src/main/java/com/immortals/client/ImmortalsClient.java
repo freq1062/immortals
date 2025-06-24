@@ -65,22 +65,24 @@ public class ImmortalsClient implements ClientModInitializer {
         if (!uuidStr.isEmpty()) {
           boolean alreadyPresent = lines.stream()
               .anyMatch(line -> line.getString().startsWith("Owner: "));
+
           if (!alreadyPresent) {
             try {
               UUID uuid = UUID.fromString(uuidStr);
-              String name = ownerNameCache.get(uuid);
-              if (name == null) {
+
+              // Try to get from cache first
+              String name = ownerNameCache.computeIfAbsent(uuid, id -> {
                 MinecraftClient client = MinecraftClient.getInstance();
                 if (client != null && client.world != null) {
-                  PlayerEntity player = client.world.getPlayerByUuid(uuid);
+                  PlayerEntity player = client.world.getPlayerByUuid(id);
                   if (player != null) {
-                    name = player.getName().getString();
-                    ownerNameCache.put(uuid, name);
+                    return player.getName().getString();
                   }
                 }
-              }
-              String display = name != null ? name : uuidStr;
-              lines.add(Text.literal("Owner: " + display).formatted(Formatting.GOLD));
+                return uuidStr; // Store UUID as fallback
+              });
+
+              lines.add(Text.literal("Owner: " + name).formatted(Formatting.GOLD));
             } catch (IllegalArgumentException e) {
               // Fallback if uuidStr is not a valid UUID
               lines.add(Text.literal("Owner: " + uuidStr).formatted(Formatting.GOLD));

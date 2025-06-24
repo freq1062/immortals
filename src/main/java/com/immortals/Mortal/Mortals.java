@@ -1,5 +1,9 @@
 package com.immortals.Mortal;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.immortals.Main;
 import com.immortals.Utils;
 import com.immortals.Immortal.SpellRegistry;
 import com.immortals.item.ModItems;
@@ -8,11 +12,15 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.item.ItemStack;
@@ -21,12 +29,15 @@ import net.minecraft.server.command.CommandManager;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.component.type.AttributeModifierSlot;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.registry.entry.RegistryEntry;
 
 /* Implements the Mortals' Lifesteal system. */
 public class Mortals {
+    private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
+
     public static void register() {
         // Lose 1 heart on death
         ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
@@ -51,21 +62,34 @@ public class Mortals {
 
                 // Mortal killed by mortal or natural causes
                 if (!attackerImmortal) {
-                    // If victim is Immortal, scale extra hearts based on corruption
                     if (victimImmortal) {
                         int corr = Utils.getCorruption(victim);
-                        System.out.println("Victim Corruption: " + corr);
-                        int heartsToGive = switch (corr) {
-                            case 2 -> 2;
-                            case 3 -> 3;
-                            default -> 1;
-                        };
+                        if (!(attacker instanceof ServerPlayerEntity)) {
+                            // Victim immortal, but killed by non player
+                            int shardsToGive = switch (corr) {
+                                case 3 -> 2;
+                                default -> 1;
+                            };
+                            for (int i = 0; i < shardsToGive; i++) {
+                                victim.getWorld().spawnEntity(new ItemEntity(
+                                        victim.getWorld(),
+                                        victim.getX(), victim.getY(), victim.getZ(),
+                                        new ItemStack(ModItems.SOUL_SHARD)));
+                            }
+                        } else {
+                            // Victim immortal, killed by mortal player
+                            int heartsToGive = switch (corr) {
+                                case 2 -> 2;
+                                case 3 -> 3;
+                                default -> 1;
+                            };
 
-                        for (int i = 0; i < heartsToGive; i++) {
-                            victim.getWorld().spawnEntity(new ItemEntity(
-                                    victim.getWorld(),
-                                    victim.getX(), victim.getY(), victim.getZ(),
-                                    new ItemStack(ModItems.HEART)));
+                            for (int i = 0; i < heartsToGive; i++) {
+                                victim.getWorld().spawnEntity(new ItemEntity(
+                                        victim.getWorld(),
+                                        victim.getX(), victim.getY(), victim.getZ(),
+                                        new ItemStack(ModItems.HEART)));
+                            }
                         }
                     } else {
                         victim.getWorld().spawnEntity(new ItemEntity(
@@ -119,6 +143,49 @@ public class Mortals {
             }
 
             return ActionResult.PASS;
+        });
+
+        // Modify XP gain based on number of hearts
+        ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+            for (ServerWorld world : server.getWorlds()) {
+                for (ExperienceOrbEntity orb : world.getEntitiesByType(
+                        EntityType.EXPERIENCE_ORB, o -> !o.isRemoved())) {
+
+                    int id = orb.getId();
+                    if (scaledOrbIds.contains(id))
+                        continue;
+
+                    PlayerEntity picker = world.getClosestPlayer(orb, 2.5);
+                    if (!(picker instanceof ServerPlayerEntity player)
+                            || !Utils.getAscended(player)) {
+                        continue;
+                    }
+
+                    int orig = orb.getExperienceAmount();
+                    int bumped = orig;
+                    EntityAttributeInstance healthAttr = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                    double maxHealth = healthAttr.getBaseValue();
+                    int hearts = (int) (maxHealth / 2.0); // Convert health to hearts
+
+                    // Scale from -mortalMaxXpGain at 0 hearts to +mortalMaxXpGain at 20 hearts
+                    double multiplier = ((hearts / 20.0) * 2.0 - 1.0) * ((Double) Main.CONFIG.get("mortalMaxXpGain"));
+                    bumped = (int) Math.ceil(orig + orig * multiplier);
+
+                    // Replace the old experience orb with scaled new one
+                    ExperienceOrbEntity newOrb = new ExperienceOrbEntity(
+                            world, orb.getX(), orb.getY(), orb.getZ(), bumped);
+                    world.spawnEntity(newOrb);
+                    orb.discard();
+
+                    scaledOrbIds.add(id);
+                    scaledOrbIds.add(newOrb.getId());
+
+                    // Clear the array, this means every 250 orbs might not be scaled but whatever
+                    if (scaledOrbIds.size() > 500) {
+                        scaledOrbIds.clear();
+                    }
+                }
+            }
         });
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -232,9 +299,8 @@ public class Mortals {
                         } else {
                             player.getInventory().getStack(slotWithCore).decrement(1);
                         }
-                        double numHearts = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH) / 2;
                         for (java.util.AbstractMap.SimpleEntry<RegistryEntry<EntityAttribute>, Float> entry : Augmentation
-                                .rollAttributes(numHearts, mainHand.getItem())) {
+                                .rollAttributes(mainHand.getItem())) {
                             Utils.addModifier(
                                     mainHand,
                                     "immortals:augmented",

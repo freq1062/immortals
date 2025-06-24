@@ -82,15 +82,15 @@ public class Spell {
                                         List<String> suggestions = new ArrayList<>();
                                         if (corr >= 1) {
                                             suggestions.add("dash");
-                                            suggestions.add("splinter_blow");
+                                            suggestions.add("glow");
                                         }
                                         if (corr >= 2) {
-                                            suggestions.add("glow");
                                             suggestions.add("backdraft");
+                                            suggestions.add("blackout");
                                         }
                                         if (corr >= 3) {
                                             suggestions.add("persist");
-                                            suggestions.add("blackout");
+                                            suggestions.add("splinter_blow");
                                         }
                                         if (Utils.inventoryHas(player, Items.DRAGON_EGG) != null) {
                                             suggestions.add("dragon_ascent");
@@ -128,11 +128,13 @@ public class Spell {
                                         }
                                         // Check corruption requirements
                                         int requiredCorr = 0;
-                                        if (spell == SpellRegistry.DASH || spell == SpellRegistry.SPLINTER_BLOW) {
+                                        if (spell == SpellRegistry.DASH || spell == SpellRegistry.GLOW) {
                                             requiredCorr = 1;
-                                        } else if (spell == SpellRegistry.GLOW || spell == SpellRegistry.BACKDRAFT) {
+                                        } else if (spell == SpellRegistry.BLACKOUT
+                                                || spell == SpellRegistry.BACKDRAFT) {
                                             requiredCorr = 2;
-                                        } else if (spell == SpellRegistry.PERSIST || spell == SpellRegistry.BLACKOUT) {
+                                        } else if (spell == SpellRegistry.PERSIST
+                                                || spell == SpellRegistry.SPLINTER_BLOW) {
                                             requiredCorr = 3;
                                         }
                                         if (requiredCorr > 0 && corr < requiredCorr) {

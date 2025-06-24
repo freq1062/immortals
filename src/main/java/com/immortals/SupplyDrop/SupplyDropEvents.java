@@ -165,17 +165,18 @@ public class SupplyDropEvents {
             if (sd.unlockAt == 0) {
                 sd.unlockAt = System.currentTimeMillis() + supplyDropUnlockTime;
                 sd.bar.setPercent(0f);
-                // show bossbar to all nearby (within 50 blocks)
-                world.getPlayers().forEach(pl -> {
-                    if (pl.squaredDistanceTo(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5) < 50 * 50)
-                        sd.bar.addPlayer(pl);
-                });
                 // Broadcast the unlocking message
                 world.getServer().getPlayerManager().broadcast(
                         Text.literal("§c" + player.getName().getString() + " is unlocking the supply drop at " +
                                 "§l" + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "§r!"),
                         false);
             }
+            // Always update bossbar players within 200 blocks
+            new ArrayList<>(sd.bar.getPlayers()).forEach(sd.bar::removePlayer);
+            world.getPlayers().forEach(pl -> {
+                if (pl.squaredDistanceTo(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5) < 200 * 200)
+                    sd.bar.addPlayer(pl);
+            });
             player.sendMessage(Text.literal("Supply Drop is being unlocked."), true);
             return ActionResult.FAIL;
         });

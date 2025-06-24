@@ -12,11 +12,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.ExperienceOrbEntity;
-import net.minecraft.entity.EntityType;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleTypes;
@@ -30,14 +27,12 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 /*Implements the Immortals' corruption system.*/
 public class Immortals {
-	private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
 	private static final Map<UUID, Integer> splinterCount = new ConcurrentHashMap<>();
 
 	public static void register() {
@@ -351,7 +346,7 @@ public class Immortals {
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
 																		Text.literal(
-																				"Propels you 10 blocks horizontally.\nCooldown "
+																				"Propels you 10 blocks in the direction you're facing.\nCooldown "
 																						+ (Main.CONFIG.get(
 																								"dashCooldown") instanceof Number
 																										? ((Number) Main.CONFIG
@@ -363,26 +358,6 @@ public class Immortals {
 																												.toString())
 																						+ "s.\nRun /bind [slot] dash to use.")))))
 										.append(Text.literal("§6 and "))
-										.append(
-												Text.literal("§cSplinter Blow")
-														.styled(style -> style.withHoverEvent(
-																new net.minecraft.text.HoverEvent(
-																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
-																		Text.literal(
-																				"Deal " + ((int) Math
-																						.round(((Number) Main.CONFIG
-																								.get("splinterBlowDmg"))
-																								.doubleValue() * 100))
-																						+ "% of target's max health\nafter a 3-hit combo. \nRun /bind [slot] splinter_blow to use.")))))
-										.append(Text.literal("§6! Hover to see details.")),
-								false);
-					}
-					if (lvl == 2) {
-						world.playSound(null, player.getX(), player.getY(), player.getZ(),
-								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
-								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-						player.sendMessage(
-								Text.literal("§6Unlocked ")
 										.append(
 												Text.literal("§cGlow")
 														.styled(style -> style.withHoverEvent(
@@ -397,7 +372,6 @@ public class Immortals {
 																										? ((Number) Main.CONFIG
 																												.get("glowDuration"))
 																												.doubleValue()
-																												/ 1000.0
 																										: Main.CONFIG
 																												.get("glowDuration")
 																												.toString())
@@ -412,7 +386,15 @@ public class Immortals {
 																												.get("glowCooldown")
 																												.toString())
 																						+ "s.\nRun /bind [slot] glow to use.")))))
-										.append(Text.literal("§6 and "))
+										.append(Text.literal("§6! Hover to see details.")),
+								false);
+					}
+					if (lvl == 2) {
+						world.playSound(null, player.getX(), player.getY(), player.getZ(),
+								net.minecraft.sound.SoundEvents.PARTICLE_SOUL_ESCAPE,
+								net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+						player.sendMessage(
+								Text.literal("§6Unlocked ")
 										.append(
 												Text.literal("§cBackdraft")
 														.styled(style -> style.withHoverEvent(
@@ -436,6 +418,30 @@ public class Immortals {
 																												.get("backdraftCooldown")
 																												.toString())
 																						+ "s. \nRun /bind [slot] backdraft to use.")))))
+										.append(Text.literal("§6 and "))
+										.append(
+												Text.literal("§cBlackout")
+														.styled(style -> style.withHoverEvent(
+																new net.minecraft.text.HoverEvent(
+																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
+																		Text.literal(
+																				"Apply blindness and invisibility for "
+																						+ Main.CONFIG
+																								.get("blackoutBlind")
+																						+ "s and\nWither II for "
+																						+ Main.CONFIG
+																								.get("blackoutWither")
+																						+ "s to all enemies.\nCooldown "
+																						+ (Main.CONFIG.get(
+																								"blackoutCooldown") instanceof Number
+																										? ((Number) Main.CONFIG
+																												.get("blackoutCooldown"))
+																												.doubleValue()
+																												/ 1000.0
+																										: Main.CONFIG
+																												.get("blackoutCooldown")
+																												.toString())
+																						+ "s.\nRun /bind [slot] blackout to use.")))))
 										.append(Text.literal("§6! Hover to see details.")),
 								false);
 					}
@@ -456,26 +462,28 @@ public class Immortals {
 																						+ Main.CONFIG.get(
 																								"persistResistance")
 																						+ "s and 8 absorption hearts when below 3 hearts.\nCooldown "
-																						+ Main.CONFIG.get(
-																								"persistCooldown")
+																						+ (Main.CONFIG.get(
+																								"persistCooldown") instanceof Number
+																										? ((Number) Main.CONFIG
+																												.get("persistCooldown"))
+																												.doubleValue()
+																												/ 1000.0
+																										: Main.CONFIG
+																												.get("persistCooldown")
+																												.toString())
 																						+ "s. \nRun /bind [slot] persist to use.")))))
 										.append(Text.literal("§6 and "))
 										.append(
-												Text.literal("§cBlackout")
+												Text.literal("§cSplinter Blow")
 														.styled(style -> style.withHoverEvent(
 																new net.minecraft.text.HoverEvent(
 																		net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
 																		Text.literal(
-																				"Apply blindness and invisibility for "
-																						+ Main.CONFIG
-																								.get("blackoutBlind")
-																						+ "s and\nWither II for "
-																						+ Main.CONFIG
-																								.get("blackoutWither")
-																						+ "s to all enemies.\nCooldown "
-																						+ Main.CONFIG
-																								.get("blackoutCooldown")
-																						+ "s.\nRun /bind [slot] blackout to use.")))))
+																				"Deal " + ((int) Math
+																						.round(((Number) Main.CONFIG
+																								.get("splinterBlowDmg"))
+																								.doubleValue() * 100))
+																						+ "% of target's max health\nafter a 3-hit combo. \nRun /bind [slot] splinter_blow to use.")))))
 										.append(Text.literal("§6! Hover to see details.")),
 								false);
 					}
@@ -519,45 +527,6 @@ public class Immortals {
 
 		// Passive abilities
 		ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
-			// Modify XP gain based on corruption level
-			for (ServerWorld world : server.getWorlds()) {
-				for (ExperienceOrbEntity orb : world.getEntitiesByType(
-						EntityType.EXPERIENCE_ORB, o -> !o.isRemoved())) {
-
-					int id = orb.getId();
-					if (scaledOrbIds.contains(id))
-						continue;
-
-					PlayerEntity picker = world.getClosestPlayer(orb, 2.5);
-					if (!(picker instanceof ServerPlayerEntity player)
-							|| !Utils.getAscended(player)) {
-						continue;
-					}
-
-					int orig = orb.getExperienceAmount();
-					int bumped = orig;
-					if (Utils.getCorruption((ServerPlayerEntity) picker) >= 1) {
-						bumped = (int) Math.ceil(orig + orig * ((Double) Main.CONFIG.get("immortalXpMultiplier")));
-					} else if (Utils.getCorruption((ServerPlayerEntity) picker) <= -1) {
-						bumped = (int) Math.ceil(orig - orig * ((Double) Main.CONFIG.get("immortalXpMultiplier")));
-					}
-
-					// Replace the old experience orb with scaled new one
-					ExperienceOrbEntity newOrb = new ExperienceOrbEntity(
-							world, orb.getX(), orb.getY(), orb.getZ(), bumped);
-					world.spawnEntity(newOrb);
-					orb.discard();
-
-					scaledOrbIds.add(id);
-					scaledOrbIds.add(newOrb.getId());
-
-					// Clear the array, this means every 250 orbs might not be scaled but whatever
-					if (scaledOrbIds.size() > 500) {
-						scaledOrbIds.clear();
-					}
-				}
-			}
-
 			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 				Integer found = Utils.inventoryHas(player, Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE);
 				if (found != null) {

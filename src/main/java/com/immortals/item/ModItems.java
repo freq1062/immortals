@@ -143,7 +143,15 @@ public class ModItems {
                                                                                                                                         + ((Integer) Main.CONFIG
                                                                                                                                                         .get("blinkDuration")
                                                                                                                                                         / 1000)
-                                                                                                                                        + " seconds."))))
+                                                                                                                                        + " seconds."),
+                                                                                        net.minecraft.text.Text
+                                                                                                        .literal("§a" +
+                                                                                                                        ((Integer) Main.CONFIG
+                                                                                                                                        .get("blinkCooldown")
+                                                                                                                                        / 1000)
+                                                                                                                        + " second cooldown.")))
+
+                                        )
                                         .enchantable(15));
         // of 15
 

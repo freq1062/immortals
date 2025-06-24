@@ -16,7 +16,7 @@ public class ImmortalsConfig {
             java.util.Map.entry("splinterBlowDmg", 0.15),
             java.util.Map.entry("dashCooldown", 15_000),
             java.util.Map.entry("glowCooldown", 45_000),
-            java.util.Map.entry("glowDuration", 10_000),
+            java.util.Map.entry("glowDuration", 10),
             java.util.Map.entry("glowRadius", 30),
             java.util.Map.entry("backdraftCooldown", 25_000),
             java.util.Map.entry("backdraftDmg", 0.2),
@@ -27,6 +27,7 @@ public class ImmortalsConfig {
             java.util.Map.entry("blackoutBlind", 15),
             java.util.Map.entry("dragonAscentCooldown", 45_000),
             java.util.Map.entry("dragonAscentRadius", 10),
+            java.util.Map.entry("dragonAscentLevitation", 3),
             java.util.Map.entry("dragonAscentTotalDmg", 0.4),
             java.util.Map.entry("fractalTotalDmg", 0.45),
             java.util.Map.entry("timeSlowDuration", 10_000),
@@ -35,8 +36,9 @@ public class ImmortalsConfig {
             java.util.Map.entry("overclockCooldown", 45_000),
             java.util.Map.entry("overclockDuration", 20_000),
             java.util.Map.entry("blinkDuration", 5_000),
+            java.util.Map.entry("blinkCooldown", 40_000),
             java.util.Map.entry("phaseChangeCooldown", 20_000),
-            java.util.Map.entry("immortalXpMultiplier", 0.25));
+            java.util.Map.entry("mortalMaxXpGain", 0.25));
 
     private final java.util.Map<String, Object> values = new java.util.HashMap<>(DEFAULTS);
 
