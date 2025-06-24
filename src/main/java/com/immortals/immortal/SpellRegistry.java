@@ -587,13 +587,13 @@ public enum SpellRegistry {
         }
 
         // Level requirements
-        if (spell == DASH && corr < 1 || spell == SPLINTER_BLOW && corr < 1) {
+        if (spell == DASH && corr < 1 || spell == GLOW && corr < 1) {
             return false;
         }
-        if (spell == GLOW && corr < 2 || spell == BACKDRAFT && corr < 2) {
+        if (spell == BLACKOUT && corr < 2 || spell == BACKDRAFT && corr < 2) {
             return false;
         }
-        if (spell == BLACKOUT && corr < 3 || spell == PERSIST && corr < 3) {
+        if (spell == SPLINTER_BLOW && corr < 3 || spell == PERSIST && corr < 3) {
             return false;
         }
         // Must have a dragon egg to use dragon ascent
