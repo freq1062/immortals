@@ -616,29 +616,7 @@ public enum SpellRegistry {
 
         spell.activate(player);
         // Wait for effects to wear off before starting cooldown
-        if (spell == PERSIST) {
-            Spell.addTask(player.getUuid(), () -> {
-                recordUse(player, spell);
-            }, (int) Main.CONFIG.get("persistResistance") * 1000);
-        } else if (spell == BLACKOUT) {
-            Spell.addTask(player.getUuid(), () -> {
-                recordUse(player, spell);
-            }, (int) Main.CONFIG.get("blackoutBlind") * 1000);
-        } else if (spell == GLOW) {
-            Spell.addTask(player.getUuid(), () -> {
-                recordUse(player, spell);
-            }, (int) Main.CONFIG.get("glowDuration") * 1000);
-        } else if (spell == DRAGON_ASCENT) {
-            Spell.addTask(player.getUuid(), () -> {
-                recordUse(player, spell);
-            }, (int) Main.CONFIG.get("dragonAscentLevitation") * 1000);
-        } else if (spell == TIMESLOW) {
-            Spell.addTask(player.getUuid(), () -> {
-                recordUse(player, spell);
-            }, (int) Main.CONFIG.get("timeSlowDuration") * 1000);
-        } else {
-            recordUse(player, spell);
-        }
+        recordUse(player, spell);
         return true;
     }
 

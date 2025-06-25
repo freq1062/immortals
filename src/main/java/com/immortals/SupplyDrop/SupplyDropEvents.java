@@ -63,10 +63,9 @@ public class SupplyDropEvents {
         world.setBlockState(pos, Blocks.CHEST.getDefaultState());
         SupplyDropEvents.drops.put(pos, new SupplyDropEvents.SupplyDrop(pos));
 
-        world.getServer().getPlayerManager().broadcast(
-                Text.literal("§6[Supply Drop] Incoming at x=" + pos.getX()
-                        + ", y=" + pos.getY() + ", z=" + pos.getZ() + "!"),
-                false);
+        world.getServer().getCommandManager().executeWithPrefix(
+                world.getServer().getCommandSource().withLevel(4),
+                "say §6[Supply Drop] Incoming at x=" + pos.getX() + ", y=" + pos.getY() + ", z=" + pos.getZ() + "!");
 
         return 1;
     }
@@ -166,10 +165,10 @@ public class SupplyDropEvents {
                 sd.unlockAt = System.currentTimeMillis() + supplyDropUnlockTime;
                 sd.bar.setPercent(0f);
                 // Broadcast the unlocking message
-                world.getServer().getPlayerManager().broadcast(
-                        Text.literal("§c" + player.getName().getString() + " is unlocking the supply drop at " +
-                                "§l" + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "§r!"),
-                        false);
+                world.getServer().getCommandManager().executeWithPrefix(
+                        world.getServer().getCommandSource().withLevel(4),
+                        "say §c" + player.getName().getString() + " is unlocking the supply drop at " +
+                                "§l" + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "§r!");
             }
             // Always update bossbar players within 200 blocks
             new ArrayList<>(sd.bar.getPlayers()).forEach(sd.bar::removePlayer);

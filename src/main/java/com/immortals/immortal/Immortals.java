@@ -12,8 +12,11 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleTypes;
@@ -30,10 +33,12 @@ import net.minecraft.util.ActionResult;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /*Implements the Immortals' corruption system.*/
 public class Immortals {
 	private static final Map<UUID, Integer> splinterCount = new ConcurrentHashMap<>();
+	private static final Set<Integer> scaledOrbIds = ConcurrentHashMap.newKeySet();
 
 	public static void register() {
 		// AttackEntityCallback for Splinter Blow
@@ -181,14 +186,14 @@ public class Immortals {
 				if (corruption == 1) {
 					newData.getSpellBindings().clear();
 				} else if (corruption == 2) {
-					// Only keep dash and splinter_blow
+					// Only keep dash and glow
 					newData.getSpellBindings().entrySet()
-							.removeIf(e -> !e.getValue().equals("dash") && !e.getValue().equals("splinter_blow"));
+							.removeIf(e -> !e.getValue().equals("dash") && !e.getValue().equals("glow"));
 				} else if (corruption == 3) {
-					// Only keep dash, splinter_blow, glow, and backdraft
+					// Only keep dash, blackout, glow, and backdraft
 					newData.getSpellBindings().entrySet()
 							.removeIf(e -> !e.getValue().equals("dash")
-									&& !e.getValue().equals("splinter_blow")
+									&& !e.getValue().equals("blackout")
 									&& !e.getValue().equals("glow")
 									&& !e.getValue().equals("backdraft"));
 				}
@@ -527,6 +532,49 @@ public class Immortals {
 
 		// Passive abilities
 		ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+
+			for (ServerWorld world : server.getWorlds()) {
+				for (ExperienceOrbEntity orb : world.getEntitiesByType(
+						EntityType.EXPERIENCE_ORB, o -> !o.isRemoved())) {
+
+					int id = orb.getId();
+					if (scaledOrbIds.contains(id))
+						continue;
+
+					PlayerEntity picker = world.getClosestPlayer(orb, 2.5);
+					if (!(picker instanceof ServerPlayerEntity player)
+							|| Utils.getAscended(player)) {
+						System.out.println("Skipping orb scaling for non-player or immortal player: " + id);
+						continue;
+					}
+
+					int orig = orb.getExperienceAmount();
+					int bumped = orig;
+					EntityAttributeInstance healthAttr = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+					double maxHealth = healthAttr.getBaseValue();
+					int hearts = (int) (maxHealth / 2.0); // Convert health to hearts
+
+					// Scale from -mortalMaxXpGain at 0 hearts to +mortalMaxXpGain at 20 hearts
+					double multiplier = ((hearts / 20.0) * 2.0 - 1.0) * ((Double) Main.CONFIG.get("mortalMaxXpGain"));
+					bumped = (int) Math.ceil(orig + orig * multiplier);
+					System.out.println("Scaling orb " + id + " from " + orig + " to " + bumped
+							+ " for player " + player.getName().getString() + " with hearts: " + hearts);
+					// Replace the old experience orb with scaled new one
+					ExperienceOrbEntity newOrb = new ExperienceOrbEntity(
+							world, orb.getX(), orb.getY(), orb.getZ(), bumped);
+					world.spawnEntity(newOrb);
+					orb.discard();
+
+					scaledOrbIds.add(id);
+					scaledOrbIds.add(newOrb.getId());
+
+					// Clear the array, this means every 250 orbs might not be scaled but whatever
+					if (scaledOrbIds.size() > 500) {
+						scaledOrbIds.clear();
+					}
+				}
+			}
+
 			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 				Integer found = Utils.inventoryHas(player, Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE);
 				if (found != null) {
