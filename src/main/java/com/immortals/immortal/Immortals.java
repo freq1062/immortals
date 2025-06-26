@@ -206,7 +206,7 @@ public class Immortals {
 				Utils.addCorruption(newPlayer, -1);
 				int lvl = Utils.getCorruption(newPlayer);
 				if (lvl <= -1) {
-					// -1: -1 heart, -10% XP gain (XP handled elsewhere)
+					// -1: -1 heart
 					newPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(18.0);
 				}
 				int next = Utils.nextShardCost(lvl);
@@ -544,7 +544,6 @@ public class Immortals {
 					PlayerEntity picker = world.getClosestPlayer(orb, 2.5);
 					if (!(picker instanceof ServerPlayerEntity player)
 							|| Utils.getAscended(player)) {
-						System.out.println("Skipping orb scaling for non-player or immortal player: " + id);
 						continue;
 					}
 
@@ -557,8 +556,6 @@ public class Immortals {
 					// Scale from -mortalMaxXpGain at 0 hearts to +mortalMaxXpGain at 20 hearts
 					double multiplier = ((hearts / 20.0) * 2.0 - 1.0) * ((Double) Main.CONFIG.get("mortalMaxXpGain"));
 					bumped = (int) Math.ceil(orig + orig * multiplier);
-					System.out.println("Scaling orb " + id + " from " + orig + " to " + bumped
-							+ " for player " + player.getName().getString() + " with hearts: " + hearts);
 					// Replace the old experience orb with scaled new one
 					ExperienceOrbEntity newOrb = new ExperienceOrbEntity(
 							world, orb.getX(), orb.getY(), orb.getZ(), bumped);

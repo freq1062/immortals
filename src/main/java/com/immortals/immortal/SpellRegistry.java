@@ -192,7 +192,7 @@ public enum SpellRegistry {
         public void activate(ServerPlayerEntity player) {
             player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE,
                     20 * (int) Main.CONFIG.get("persistResistance"), 1, false, true));
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 20 * 5 * 60, 3, false, true));
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 20 * 5 * 60, 2, false, true));
             player.sendMessage(Text.literal("§aYour will strengthens... (+Resistance II)"), true);
         }
     },

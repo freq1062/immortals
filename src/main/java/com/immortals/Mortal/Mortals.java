@@ -140,26 +140,65 @@ public class Mortals {
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             dispatcher.register(CommandManager.literal("withdraw")
-                    .then(CommandManager.argument("hearts", IntegerArgumentType.integer(1))
+                    .then(CommandManager.argument("hearts/corruption levels", IntegerArgumentType.integer(1))
                             .executes(ctx -> {
                                 ServerPlayerEntity player = ctx.getSource().getPlayer();
 
+                                int amntToWithdraw = IntegerArgumentType.getInteger(ctx, "hearts/corruption levels");
+
                                 if (Utils.getAscended(player)) {
-                                    player.sendMessage(Text.literal("You cannot withdraw hearts as an immortal!"),
+                                    int currentCorruption = Utils.getCorruption(player);
+                                    int maxWithdraw = 3 + currentCorruption;
+                                    if (amntToWithdraw > maxWithdraw) {
+                                        player.sendMessage(
+                                                Text.literal("Invalid number of corruption levels to withdraw."),
+                                                false);
+                                        return 0;
+                                    }
+
+                                    // Calculate soul shards to give
+                                    int totalSoulShards = 0;
+                                    int from = currentCorruption;
+                                    int to = currentCorruption - amntToWithdraw;
+                                    if (to == -1) {
+                                        player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                                                .setBaseValue(18.0);
+                                    }
+                                    for (int i = from; i > to; i--) {
+                                        if (i == 3) {
+                                            totalSoulShards += 3;
+                                        } else if (i == 2) {
+                                            totalSoulShards += 2;
+                                        } else {
+                                            totalSoulShards += 1;
+                                        }
+                                    }
+
+                                    // Give soul shards
+                                    ItemStack soulShards = new ItemStack(ModItems.SOUL_SHARD, totalSoulShards);
+                                    if (!player.getInventory().insertStack(soulShards)) {
+                                        player.dropItem(soulShards, false);
+                                    }
+
+                                    // Lower corruption
+                                    Utils.setCorruption(player, currentCorruption - amntToWithdraw);
+
+                                    player.sendMessage(Text.literal(
+                                            "Withdrew " + amntToWithdraw + " corruption level(s) and received "
+                                                    + totalSoulShards + " soul shard(s)."),
                                             false);
-                                    return 0;
+                                    return 1;
                                 }
 
-                                int heartsToWithdraw = IntegerArgumentType.getInteger(ctx, "hearts");
                                 double currentHealth = player.getHealth();
                                 double maxHealth = player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
                                         .getBaseValue();
 
-                                if (heartsToWithdraw < 1 || maxHealth - (heartsToWithdraw * 2) < 1) {
+                                if (amntToWithdraw < 1 || maxHealth - (amntToWithdraw * 2) < 1) {
                                     player.sendMessage(Text.literal("Invalid amount of hearts to withdraw."), false);
                                     return 0;
                                 }
-                                double totalHpToWithdraw = heartsToWithdraw * 2;
+                                double totalHpToWithdraw = amntToWithdraw * 2;
 
                                 // Reduce player's max health
                                 player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
@@ -167,11 +206,11 @@ public class Mortals {
                                 player.setHealth((float) Math.min(currentHealth, maxHealth - totalHpToWithdraw));
 
                                 // Give the player hearts
-                                ItemStack heartShard = new ItemStack(ModItems.HEART, heartsToWithdraw);
+                                ItemStack heartShard = new ItemStack(ModItems.HEART, amntToWithdraw);
                                 if (!player.getInventory().insertStack(heartShard)) {
                                     player.dropItem(heartShard, false);
                                 }
-                                player.sendMessage(Text.literal("Withdrew " + heartsToWithdraw + " hearts."),
+                                player.sendMessage(Text.literal("Withdrew " + amntToWithdraw + " hearts."),
                                         false);
                                 if (Utils.inventoryHas(player, ModItems.ASCENSION_TOTEM) != null) {
                                     player.sendMessage(Text.literal(
