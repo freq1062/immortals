@@ -10,7 +10,6 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.command.argument.BlockPosArgumentType;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -102,10 +101,23 @@ public class SupplyDropEvents {
                                                         false);
                                                 return 1;
                                             })));
-            // supplydrop <start|stop>: Defaults to stop on server start
+            // supplydrop <start|stop|next|reset>: Defaults to stop on server start
             dispatcher.register(
                     CommandManager.literal("supplydrop")
                             .requires(source -> source.hasPermissionLevel(4))
+                            .then(CommandManager.literal("reset")
+                                    .executes(ctx -> {
+                                        if (state == null) {
+                                            ctx.getSource().sendFeedback(
+                                                    () -> Text.literal("Supply Drop state not initialized."), false);
+                                            return 1;
+                                        }
+                                        state.lastSpawnTime = System.currentTimeMillis() - supplyDropIntervalMs;
+                                        state.markDirty();
+                                        ctx.getSource().sendFeedback(
+                                                () -> Text.literal("Supply Drop timer reset!"), false);
+                                        return 1;
+                                    }))
                             .then(CommandManager.literal("start")
                                     .executes(ctx -> {
                                         drop = true;
