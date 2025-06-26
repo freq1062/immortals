@@ -1,6 +1,7 @@
 package com.immortals.SupplyDrop;
 
 import com.immortals.Main;
+import com.immortals.Utils;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -9,6 +10,7 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.command.argument.BlockPosArgumentType;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -18,6 +20,7 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.entity.boss.ServerBossBar;
 import net.minecraft.loot.LootTable;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.entity.boss.BossBar;
@@ -39,6 +42,7 @@ public class SupplyDropEvents {
     private static int supplyDropRadius = (Integer) Main.CONFIG.get("supplyDropRadius");
     private static long supplyDropIntervalMs = (Long) Main.CONFIG.get("supplyDropIntervalMs");
     private static long supplyDropUnlockTime = (Integer) Main.CONFIG.get("supplyDropUnlockTime");
+    private static long supplyDropResendInterval = (Long) Main.CONFIG.get("supplyDropResendInterval");
 
     private static class SupplyDrop {
         final BlockPos pos;
@@ -62,15 +66,17 @@ public class SupplyDropEvents {
             throws CommandSyntaxException {
         world.setBlockState(pos, Blocks.CHEST.getDefaultState());
         SupplyDropEvents.drops.put(pos, new SupplyDropEvents.SupplyDrop(pos));
-
+        System.out.println("Spawning supply drop at " + pos);
         world.getServer().getCommandManager().executeWithPrefix(
                 world.getServer().getCommandSource().withLevel(4),
-                "say §6[Supply Drop] Incoming at x=" + pos.getX() + ", y=" + pos.getY() + ", z=" + pos.getZ() + "!");
-
+                "say §6Supply Drop Incoming at x=" + pos.getX() + ", y=" + pos.getY() + ", z=" + pos.getZ() + "!");
+        Utils.sendDiscordWebhook(
+                "Supply Drop Incoming at x=" + pos.getX() + ", y=" + pos.getY() + ", z=" + pos.getZ() + "!");
         return 1;
     }
 
     public static void register() {
+
         CommandRegistrationCallback.EVENT.register((dispatcher, environment, registryAccess) -> {
             // spawnsupply <x> <y> <z>: Spawns a locked supply drop at the given coordinates
             dispatcher.register(
@@ -169,6 +175,9 @@ public class SupplyDropEvents {
                         world.getServer().getCommandSource().withLevel(4),
                         "say §c" + player.getName().getString() + " is unlocking the supply drop at " +
                                 "§l" + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "§r!");
+                Utils.sendDiscordWebhook(
+                        player.getName().getString() + " is unlocking the supply drop at "
+                                + pos.getX() + " " + pos.getY() + " " + pos.getZ() + "!");
             }
             // Always update bossbar players within 200 blocks
             new ArrayList<>(sd.bar.getPlayers()).forEach(sd.bar::removePlayer);
@@ -180,9 +189,41 @@ public class SupplyDropEvents {
             return ActionResult.FAIL;
         });
 
-        // Timer logic
         ServerTickEvents.START_SERVER_TICK.register(server -> {
 
+            // Spawn indicator particles
+            if (server.getTicks() % 40 == 0) {
+                for (Map.Entry<BlockPos, SupplyDrop> entry : drops.entrySet()) {
+                    BlockPos pos = entry.getKey();
+                    ServerWorld world = server.getWorld(ServerWorld.OVERWORLD);
+                    if (world != null) {
+                        for (int y = 1; y <= 20; y++) {
+                            world.spawnParticles(
+                                    ParticleTypes.GLOW,
+                                    pos.getX() + 0.5, pos.getY() + y, pos.getZ() + 0.5,
+                                    5, 0.1, 0.0, 0.1, 0.0);
+                        }
+                    }
+                }
+            }
+
+            // Resend location if not unlocked, supplyDropResendInterval is in ms
+            if (server.getTicks() % Math.max(1, supplyDropResendInterval / 50) == 0) {
+                for (Map.Entry<BlockPos, SupplyDrop> entry : drops.entrySet()) {
+                    SupplyDrop sd = entry.getValue();
+                    if (!sd.unlocked && sd.unlockAt == 0) {
+                        ServerWorld world = server.getWorld(ServerWorld.OVERWORLD);
+                        if (world != null) {
+                            world.getServer().getCommandManager().executeWithPrefix(
+                                    world.getServer().getCommandSource().withLevel(4),
+                                    "say §6Supply Drop at x=" + sd.pos.getX() + ", y=" + sd.pos.getY() +
+                                            ", z=" + sd.pos.getZ() + " is still locked!");
+                        }
+                    }
+                }
+            }
+
+            // Timer logic
             ServerWorld overworld = server.getWorld(ServerWorld.OVERWORLD);
             if (state == null) {
                 PersistentStateManager stateManager = overworld.getPersistentStateManager();
@@ -262,8 +303,13 @@ public class SupplyDropEvents {
                     sd.bar.setPercent(1f);
                     sd.bar.setName(Text.literal("Supply Drop Unlocked!"));
                     // Broadcast the unlocking message
-                    server.getPlayerManager().broadcast(
-                            Text.literal("§aSupply Drop at " + sd.pos + " has been opened!"), false);
+                    overworld.getServer().getCommandManager().executeWithPrefix(
+                            overworld.getServer().getCommandSource().withLevel(4),
+                            "say §aSupply Drop at " + sd.pos + " has been opened!");
+                    Utils.sendDiscordWebhook(
+                            String.format(
+                                    "Supply Drop at x=%d, y=%d, z=%d has been opened!",
+                                    sd.pos.getX(), sd.pos.getY(), sd.pos.getZ()));
                     // Remove bossbar
                     new ArrayList<>(sd.bar.getPlayers()).forEach(sd.bar::removePlayer);
                 }

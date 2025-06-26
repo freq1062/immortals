@@ -136,7 +136,7 @@
             {
               "function": "minecraft:set_count",
               "count": {
-                "min": 0,
+                "min": 2,
                 "max": 10
               }
             }
@@ -177,12 +177,12 @@
       ]
     },
     {
-      "rolls": 2,
+      "rolls": 4,
       "entries": [
         {
           "type": "minecraft:item",
           "name": "minecraft:enchanted_golden_apple",
-          "weight": 1
+          "weight": 2
         },
         {
           "type": "minecraft:empty",

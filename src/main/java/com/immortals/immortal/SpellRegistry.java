@@ -194,6 +194,27 @@ public enum SpellRegistry {
                     20 * (int) Main.CONFIG.get("persistResistance"), 1, false, true));
             player.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 20 * 5 * 60, 2, false, true));
             player.sendMessage(Text.literal("§aYour will strengthens... (+Resistance II)"), true);
+            // Draw particles
+            ServerWorld world = (ServerWorld) player.getWorld();
+            Vec3d center = player.getPos();
+            double playerHeight = player.getHeight();
+            double playerRadius = 0.7; // slightly larger than player
+            int steps = 10;
+            int particlesPerCircle = 32;
+            DustParticleEffect effect = new DustParticleEffect(0x00FF00, 2f); // greenish
+
+            for (int i = 0; i < steps; i++) {
+                double y = center.y + playerHeight - (i * playerHeight / (steps - 1));
+                int delay = i * 1000 / steps; // spread over 1 second
+                Spell.addTask(player.getUuid(), () -> {
+                    for (int j = 0; j < particlesPerCircle; j++) {
+                        double angle = 2 * Math.PI * j / particlesPerCircle;
+                        double x = center.x + Math.cos(angle) * playerRadius;
+                        double z = center.z + Math.sin(angle) * playerRadius;
+                        world.spawnParticles(effect, x, y, z, 1, 0, 0, 0, 0.01);
+                    }
+                }, delay);
+            }
         }
     },
 

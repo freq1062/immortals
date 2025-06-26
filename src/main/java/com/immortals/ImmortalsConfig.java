@@ -11,8 +11,12 @@ public class ImmortalsConfig {
     // Config keys and their default values
     private static final java.util.Map<String, Object> DEFAULTS = java.util.Map.ofEntries(
             java.util.Map.entry("supplyDropIntervalMs", 86_400_000L),
-            java.util.Map.entry("supplyDropRadius", 50),
+            java.util.Map.entry("supplyDropRadius", 500),
             java.util.Map.entry("supplyDropUnlockTime", 300_000),
+            java.util.Map.entry("supplyDropWebhookURL",
+                    ""),
+            java.util.Map.entry("supplyDropResendInterval",
+                    600_000L),
             java.util.Map.entry("splinterBlowDmg", 0.15),
             java.util.Map.entry("dashCooldown", 15_000),
             java.util.Map.entry("glowCooldown", 45_000),
@@ -21,7 +25,7 @@ public class ImmortalsConfig {
             java.util.Map.entry("backdraftCooldown", 25_000),
             java.util.Map.entry("backdraftDmg", 0.2),
             java.util.Map.entry("persistCooldown", 40_000),
-            java.util.Map.entry("persistResistance", 7),
+            java.util.Map.entry("persistResistance", 5),
             java.util.Map.entry("blackoutCooldown", 45_000),
             java.util.Map.entry("blackoutWither", 8),
             java.util.Map.entry("blackoutBlind", 15),
@@ -73,6 +77,8 @@ public class ImmortalsConfig {
                     value = prop != null ? Long.parseLong(prop) : def;
                 } else if (def instanceof Double) {
                     value = prop != null ? Double.parseDouble(prop) : def;
+                } else if (def instanceof String) {
+                    value = prop != null ? prop : def;
                 }
             } catch (NumberFormatException ignored) {
             }

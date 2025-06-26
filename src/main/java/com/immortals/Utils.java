@@ -30,6 +30,13 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import com.immortals.api.PlayerImmortalsData;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
 import com.immortals.Immortal.Spell;
 
 import net.minecraft.entity.EntityType;
@@ -306,4 +313,32 @@ public class Utils {
             }
         }
     }
+
+    public static void sendDiscordWebhook(String content) {
+        System.out.println("Sending Discord webhook with content: " + content);
+        try {
+            URL url = java.net.URI.create((String) Main.CONFIG.get("supplyDropWebhookURL")).toURL();
+            System.out.println("Discord webhook URL: " + url);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json");
+            System.out.println("Sending Discord webhook to: " + url);
+
+            String jsonPayload = "{\"content\":\"" + content.replace("\"", "\\\"") + "\"}";
+
+            try (OutputStream os = connection.getOutputStream()) {
+                byte[] input = jsonPayload.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 204) {
+                System.out.println("Discord webhook failed with code: " + responseCode);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
 }
