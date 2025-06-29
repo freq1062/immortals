@@ -132,7 +132,7 @@
         {
           "type": "minecraft:item",
           "name": "immortals:ascension_relic",
-          "weight": 5
+          "weight": 1
         },
         {
           "type": "minecraft:empty",

@@ -77,7 +77,7 @@ public class ModItems {
                                                                                         net.minecraft.text.Text.literal(
                                                                                                         "in your main hand, and two random attributes will be applied."),
                                                                                         net.minecraft.text.Text.literal(
-                                                                                                        "Does not stack, but the quality of attributes scales with heart count.")))));
+                                                                                                        "Does not stack.")))));
 
         public static final Item PHASEBREAKER = registerItem(
                         "phasebreaker",

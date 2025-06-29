@@ -1,0 +1,25 @@
+{
+  "criteria": {
+    "has_heart": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "immortals:heart",
+            "count": 1
+          }
+        ]
+      }
+    }
+  },
+  "rewards": {
+    "recipes": [
+      "immortals:soul_shard"
+    ]
+  },
+  "requirements": [
+    [
+      "has_heart"
+    ]
+  ]
+}

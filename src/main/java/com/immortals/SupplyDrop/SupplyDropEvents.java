@@ -101,10 +101,26 @@ public class SupplyDropEvents {
                                                         false);
                                                 return 1;
                                             })));
-            // supplydrop <start|stop|next|reset>: Defaults to stop on server start
+            // supplydrop <start|stop|next|reset|list>: Defaults to stop on server start
             dispatcher.register(
                     CommandManager.literal("supplydrop")
                             .requires(source -> source.hasPermissionLevel(4))
+                            .then(CommandManager.literal("list")
+                                    .executes(ctx -> {
+                                        if (drops.isEmpty()) {
+                                            ctx.getSource().sendFeedback(
+                                                    () -> Text.literal("No active supply drops."), false);
+                                            return 1;
+                                        }
+                                        StringBuilder sb = new StringBuilder("Active (locked) supply drops:\n");
+                                        drops.values().stream()
+                                                .filter(sd -> !sd.unlocked)
+                                                .forEach(sd -> sb.append(String.format(" - [%d %d %d]\n", sd.pos.getX(),
+                                                        sd.pos.getY(), sd.pos.getZ())));
+                                        ctx.getSource().sendFeedback(
+                                                () -> Text.literal(sb.toString()), false);
+                                        return 1;
+                                    }))
                             .then(CommandManager.literal("reset")
                                     .executes(ctx -> {
                                         if (state == null) {
