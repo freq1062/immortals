@@ -1,11 +1,11 @@
 {
   "criteria": {
-    "has_relic": {
+    "has_heart": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
-            "items": "immortals:heart",
+            "item": "immortals:heart",
             "count": 1
           }
         ]
@@ -19,7 +19,7 @@
   },
   "requirements": [
     [
-      "has_relic"
+      "has_heart"
     ]
   ]
 }

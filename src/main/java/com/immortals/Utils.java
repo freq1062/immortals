@@ -94,7 +94,7 @@ public class Utils {
 
     public static void applyCorruptionEffects(ServerPlayerEntity player) {
         int level = getCorruption(player);
-        int duration = 40; // 2 seconds (40 ticks)
+        int duration = 60; // 3 seconds (60 ticks)
 
         if (level <= -2) {
             // -2: Slowness I
@@ -106,6 +106,11 @@ public class Utils {
             // -3: Weakness I
             player.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.WEAKNESS, duration, 0, false, false));
+        }
+
+        if (level <= -1) {
+            // -1: 9 max hearts
+            player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(18.0);
         }
 
         if (level >= 1) {

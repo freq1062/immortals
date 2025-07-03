@@ -61,6 +61,12 @@ public class ModItems {
                                                         java.util.List.of(
                                                                         net.minecraft.text.Text.literal(
                                                                                         "§cA piece of mortal essence.")))));
+        public static final Item ARTIFICIAL_HEART = registerItem("artificial_heart", Item::new, new Item.Settings()
+                        .component(DataComponentTypes.LORE,
+                                        new LoreComponent(
+                                                        java.util.List.of(
+                                                                        net.minecraft.text.Text.literal(
+                                                                                        "§cA piece of natural essence, shaped to imitate a heart.")))));
         public static final Item AUGMENTATION_CORE = registerItem("augmentation_core", Item::new,
                         new Item.Settings()
                                         .component(DataComponentTypes.LORE,
@@ -177,6 +183,7 @@ public class ModItems {
                 entries.add(SOUL_PURIFIER);
                 entries.add(SOUL_SHARD);
                 entries.add(HEART);
+                entries.add(ARTIFICIAL_HEART);
                 entries.add(AUGMENTATION_CORE);
         }
 

@@ -1,11 +1,11 @@
 {
   "criteria": {
-    "has_relic": {
+    "has_sea_heart": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
-            "item": "immortals:ascension_relic",
+            "item": "minecraft:heart_of_the_sea",
             "count": 1
           }
         ]
@@ -14,12 +14,12 @@
   },
   "rewards": {
     "recipes": [
-      "immortals:ascension_totem"
+      "immortals:artificial_heart"
     ]
   },
   "requirements": [
     [
-      "has_relic"
+      "has_sea_heart"
     ]
   ]
 }

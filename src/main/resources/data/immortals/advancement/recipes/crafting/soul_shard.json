@@ -5,7 +5,7 @@
       "conditions": {
         "items": [
           {
-            "items": "immortals:heart",
+            "item": "immortals:heart",
             "count": 1
           }
         ]

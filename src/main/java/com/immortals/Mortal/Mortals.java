@@ -133,6 +133,22 @@ public class Mortals {
                 // Immortal tries to use a heart
                 player.sendMessage(Text.literal("An immortal does not need extra hearts to be strong."), true);
                 return ActionResult.FAIL;
+            } else if (stack.getItem() == ModItems.ARTIFICIAL_HEART) {
+                if (!Utils.getAscended((ServerPlayerEntity) player)) {
+                    EntityAttributeInstance curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                    if (curr_hp.getBaseValue() < 14.0) { // 7 hearts
+                        curr_hp.setBaseValue(curr_hp.getBaseValue() + 2.0);
+                        stack.decrement(1);
+                        return ActionResult.SUCCESS;
+                    } else {
+                        player.sendMessage(Text.literal("§5Artificial heart can only recover up to 7 hearts."),
+                                true);
+                        return ActionResult.FAIL;
+                    }
+                }
+                // Immortal tries to use a heart
+                player.sendMessage(Text.literal("An immortal does not need extra hearts to be strong."), true);
+                return ActionResult.FAIL;
             }
 
             return ActionResult.PASS;
@@ -154,40 +170,112 @@ public class Mortals {
                                                 Text.literal("Invalid number of corruption levels to withdraw."),
                                                 false);
                                         return 0;
-                                    }
-
-                                    // Calculate soul shards to give
-                                    int totalSoulShards = 0;
-                                    int from = currentCorruption;
-                                    int to = currentCorruption - amntToWithdraw;
-                                    if (to == -1) {
-                                        player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
-                                                .setBaseValue(18.0);
-                                    }
-                                    for (int i = from; i > to; i--) {
-                                        if (i == 3) {
-                                            totalSoulShards += 3;
-                                        } else if (i == 2) {
-                                            totalSoulShards += 2;
-                                        } else {
-                                            totalSoulShards += 1;
+                                    } else {
+                                        int numShards = 0;
+                                        int numPurifiers = 0;
+                                        for (int i = 0; i < amntToWithdraw; i++) {
+                                            int newCorruption = currentCorruption - i;
+                                            if (newCorruption > 0) {
+                                                // Award soul shards for positive levels
+                                                if (newCorruption == 3) {
+                                                    numShards += 3;
+                                                } else if (newCorruption == 2) {
+                                                    numShards += 2;
+                                                } else {
+                                                    numShards += 1;
+                                                }
+                                            } else {
+                                                // Award soul purifiers for negative levels
+                                                numPurifiers += 1;
+                                            }
                                         }
+                                        if (numShards > 0) {
+                                            ItemStack soulShards = new ItemStack(ModItems.SOUL_SHARD, numShards);
+                                            if (!player.getInventory().insertStack(soulShards)) {
+                                                player.dropItem(soulShards, false);
+                                            }
+                                        }
+                                        if (numPurifiers > 0) {
+                                            ItemStack purifiers = new ItemStack(ModItems.SOUL_PURIFIER, numPurifiers);
+                                            if (!player.getInventory().insertStack(purifiers)) {
+                                                player.dropItem(purifiers, false);
+                                            }
+                                        }
+                                        Utils.setCorruption(player, currentCorruption - amntToWithdraw);
+                                        player.sendMessage(Text.literal(
+                                                "Withdrew " + amntToWithdraw + " corruption level(s) and received "
+                                                        + (numShards > 0 ? numShards + " soul shard(s)" : "")
+                                                        + (numShards > 0 && numPurifiers > 0 ? " and " : "")
+                                                        + (numPurifiers > 0 ? numPurifiers + " soul purifier(s)" : "")
+                                                        + "."),
+                                                false);
+                                        return 1;
                                     }
+                                    // if (amntToWithdraw > 0) {
+                                    // int maxWithdraw = 3 + currentCorruption;
+                                    // if (amntToWithdraw > maxWithdraw) {
+                                    // player.sendMessage(
+                                    // Text.literal("Invalid number of corruption levels to withdraw."),
+                                    // false);
+                                    // return 0;
+                                    // }
 
-                                    // Give soul shards
-                                    ItemStack soulShards = new ItemStack(ModItems.SOUL_SHARD, totalSoulShards);
-                                    if (!player.getInventory().insertStack(soulShards)) {
-                                        player.dropItem(soulShards, false);
-                                    }
+                                    // // Award soul shards for positive levels
+                                    // int totalSoulShards = 0;
+                                    // int from = currentCorruption;
+                                    // int to = currentCorruption - amntToWithdraw;
+                                    // if (to == -1) {
+                                    // player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                                    // .setBaseValue(18.0);
+                                    // }
+                                    // for (int i = from; i > to; i--) {
+                                    // if (i == 3) {
+                                    // totalSoulShards += 3;
+                                    // } else if (i == 2) {
+                                    // totalSoulShards += 2;
+                                    // } else {
+                                    // totalSoulShards += 1;
+                                    // }
+                                    // }
 
-                                    // Lower corruption
-                                    Utils.setCorruption(player, currentCorruption - amntToWithdraw);
+                                    // // Give soul shards
+                                    // ItemStack soulShards = new ItemStack(ModItems.SOUL_SHARD, totalSoulShards);
+                                    // if (!player.getInventory().insertStack(soulShards)) {
+                                    // player.dropItem(soulShards, false);
+                                    // }
 
-                                    player.sendMessage(Text.literal(
-                                            "Withdrew " + amntToWithdraw + " corruption level(s) and received "
-                                                    + totalSoulShards + " soul shard(s)."),
-                                            false);
-                                    return 1;
+                                    // // Lower corruption
+                                    // Utils.setCorruption(player, currentCorruption - amntToWithdraw);
+
+                                    // player.sendMessage(Text.literal(
+                                    // "Withdrew " + amntToWithdraw + " corruption level(s) and received "
+                                    // + totalSoulShards + " soul shard(s)."),
+                                    // false);
+                                    // return 1;
+                                    // } else if (amntToWithdraw < 0) {
+                                    // // Award soul purifiers for negative levels
+                                    // int absWithdraw = Math.abs(amntToWithdraw);
+                                    // int current = currentCorruption;
+                                    // int to = currentCorruption - absWithdraw;
+                                    // int totalPurifiers = 0;
+                                    // for (int i = current; i > to; i--) {
+                                    // totalPurifiers += 1;
+                                    // }
+                                    // ItemStack purifiers = new ItemStack(ModItems.SOUL_PURIFIER, totalPurifiers);
+                                    // if (!player.getInventory().insertStack(purifiers)) {
+                                    // player.dropItem(purifiers, false);
+                                    // }
+                                    // Utils.setCorruption(player, currentCorruption - absWithdraw);
+                                    // player.sendMessage(Text.literal(
+                                    // "Withdrew " + absWithdraw
+                                    // + " negative corruption level(s) and received "
+                                    // + totalPurifiers + " soul purifier(s)."),
+                                    // false);
+                                    // return 1;
+                                    // } else {
+                                    // player.sendMessage(Text.literal("Invalid amount to withdraw."), false);
+                                    // return 0;
+                                    // }
                                 }
 
                                 double currentHealth = player.getHealth();
@@ -200,18 +288,38 @@ public class Mortals {
                                 }
                                 double totalHpToWithdraw = amntToWithdraw * 2;
 
+                                // Calculate regular and artificial hearts
+                                int currentHearts = (int) (maxHealth / 2);
+                                int minHearts = 7;
+                                int regularHearts = Math.max(0, currentHearts - minHearts);
+                                int regularToGive = Math.min(amntToWithdraw, regularHearts);
+                                int artificialToGive = amntToWithdraw - regularToGive;
+
                                 // Reduce player's max health
                                 player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
                                         .setBaseValue(maxHealth - totalHpToWithdraw);
                                 player.setHealth((float) Math.min(currentHealth, maxHealth - totalHpToWithdraw));
 
                                 // Give the player hearts
-                                ItemStack heartShard = new ItemStack(ModItems.HEART, amntToWithdraw);
-                                if (!player.getInventory().insertStack(heartShard)) {
-                                    player.dropItem(heartShard, false);
+                                if (regularToGive > 0) {
+                                    ItemStack heartShard = new ItemStack(ModItems.HEART, regularToGive);
+                                    if (!player.getInventory().insertStack(heartShard)) {
+                                        player.dropItem(heartShard, false);
+                                    }
                                 }
-                                player.sendMessage(Text.literal("Withdrew " + amntToWithdraw + " hearts."),
-                                        false);
+                                if (artificialToGive > 0) {
+                                    ItemStack artificialHeart = new ItemStack(ModItems.ARTIFICIAL_HEART,
+                                            artificialToGive);
+                                    if (!player.getInventory().insertStack(artificialHeart)) {
+                                        player.dropItem(artificialHeart, false);
+                                    }
+                                }
+                                player.sendMessage(Text.literal("Withdrew " + amntToWithdraw + " hearts (" +
+                                        (regularToGive > 0 ? regularToGive + " regular" : "") +
+                                        (regularToGive > 0 && artificialToGive > 0 ? ", " : "") +
+                                        (artificialToGive > 0 ? artificialToGive + " artificial" : "") +
+                                        ")."), false);
+
                                 if (Utils.inventoryHas(player, ModItems.ASCENSION_TOTEM) != null) {
                                     player.sendMessage(Text.literal(
                                             "If you're about to exploit those hearts, just know that this is bannable. You're not slick with this dawg"),

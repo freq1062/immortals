@@ -1,0 +1,18 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+        "#E#",
+        "EHE",
+        "NEN"
+    ],
+    "key": {
+        "#": "minecraft:nautilus_shell",
+        "E": "minecraft:echo_shard",
+        "H": "minecraft:heart_of_the_sea",
+        "N": "minecraft:netherite_scrap"
+    },
+    "result": {
+        "id": "immortals:artificial_heart",
+        "count": 1
+    }
+}

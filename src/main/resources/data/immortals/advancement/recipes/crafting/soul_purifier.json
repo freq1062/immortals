@@ -5,7 +5,7 @@
       "conditions": {
         "items": [
           {
-            "items": "immortals:ascension_relic",
+            "item": "immortals:ascension_relic",
             "count": 1
           }
         ]
