@@ -1,0 +1,6 @@
+{
+    "parent": "item/generated",
+    "textures": {
+        "layer0": "immortals:item/ascension_totem"
+    }
+}

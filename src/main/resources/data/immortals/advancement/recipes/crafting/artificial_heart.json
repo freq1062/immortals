@@ -1,0 +1,25 @@
+{
+  "criteria": {
+    "has_sea_heart": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "item": "minecraft:heart_of_the_sea",
+            "count": 1
+          }
+        ]
+      }
+    }
+  },
+  "rewards": {
+    "recipes": [
+      "immortals:artificial_heart"
+    ]
+  },
+  "requirements": [
+    [
+      "has_sea_heart"
+    ]
+  ]
+}

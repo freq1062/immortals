@@ -1,0 +1,17 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+        " D ",
+        "DNE",
+        " E "
+    ],
+    "key": {
+        "D": "minecraft:netherite_scrap",
+        "N": "immortals:heart",
+        "E": "minecraft:nautilus_shell"
+    },
+    "result": {
+        "id": "immortals:augmentation_core",
+        "count": 2
+    }
+}

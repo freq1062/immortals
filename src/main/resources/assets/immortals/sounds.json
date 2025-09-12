@@ -1,0 +1,11 @@
+{
+    "glass": {
+        "category": "master",
+        "sounds": [
+            {
+                "name": "immortals:glass",
+                "stream": false
+            }
+        ]
+    }
+}

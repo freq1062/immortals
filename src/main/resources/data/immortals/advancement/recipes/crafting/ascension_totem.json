@@ -1,0 +1,25 @@
+{
+  "criteria": {
+    "has_relic": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "item": "immortals:ascension_relic",
+            "count": 1
+          }
+        ]
+      }
+    }
+  },
+  "rewards": {
+    "recipes": [
+      "immortals:ascension_totem"
+    ]
+  },
+  "requirements": [
+    [
+      "has_relic"
+    ]
+  ]
+}

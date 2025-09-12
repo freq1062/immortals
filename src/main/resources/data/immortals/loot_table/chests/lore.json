@@ -1,0 +1,313 @@
+{
+  "type": "minecraft:chest",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:paper",
+          "functions": [
+            {
+              "function": "minecraft:set_name",
+              "name": "1789x -2482z"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:clock"
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:empty",
+          "weight": 2
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:netherite_scrap",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "rolls": 5,
+      "entries": [
+        {
+          "type": "minecraft:empty",
+          "weight": 1
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:echo_shard",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "functions": [
+            {
+              "function": "minecraft:set_book_cover",
+              "title": "When I was a man",
+              "author": "thefirstimmortal"
+            },
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "I remember the war. The noise, the fire, the way commanders sent boys to die to protect ground that didn’t matter.  I survived. I kept surviving.  That’s when I realized: The world doesn’t reward the right. It rewards the strong."
+                },
+                {
+                  "raw": "I stopped asking who deserved to live. I stopped pretending anyone cared.  I killed because I could. And in killing, I became free."
+                },
+                {
+                  "raw": "They promised immortality, and I took it. Not to protect the world — but to rise above it.  Regret? No. I left that behind, with the body they buried in my place."
+                }
+              ],
+              "mode": "append"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "functions": [
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "throne of no pulse; bones fold like prayer; sstill I breathe, still I wait. The door will open, The end will come; The fool will take their first breath in a grave."
+                },
+                {
+                  "raw": "I came here to escape death. So why… Why do I write as though I want to be found?"
+                }
+              ],
+              "mode": "append"
+            },
+            {
+              "function": "minecraft:set_book_cover",
+              "title": "DO NOT READ",
+              "author": "thefirstimmortal"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "They all say the same thing: We can share the power. We can rule together. Liars. Power doesn’t coexist. It competes.The moment you gain strength, the moment you're useful, they come for you; Smiling. Laughing. Pretending to help until the knife is in your back."
+                },
+                {
+                  "raw": "You cannot build empires with others. You build them over others. I don’t regret fleeing. I only regret not killing them first."
+                }
+              ],
+              "mode": "append"
+            },
+            {
+              "function": "minecraft:set_book_cover",
+              "name": "",
+              "title": "To Trust Is To Die",
+              "author": "thefirstimmortal",
+              "conditions": []
+            }
+          ]
+        },
+        {
+          "type": "minecraft:empty",
+          "weight": 1
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "After being here for so long, I don't think this place is real. Mobs appear, but don't move. Things seem out of place and bizzare. This place is a shattered memory...A familliar but fractured version of the overworld I once knew."
+                },
+                {
+                  "raw": "As if God forgot to run the clock here, nothing ever happens. It has preserved me for so long..."
+                }
+              ],
+              "mode": "append"
+            },
+            {
+              "function": "minecraft:set_book_cover",
+              "title": "What is the Null Space?",
+              "author": "thefirstimmortal",
+              "conditions": []
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "functions": [
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "Following the breach event involving the Individual, global consensus has confirmed the presence of additional immortals. Your current findings, while foundational, are incomplete with only a basic understanding of the \"corruption system\" and its applications through spells. "
+                },
+                {
+                  "raw": "You are hereby authorized to enact your recommended simulation protocol to replicate the emerging conflict and greatly speed up the research process. We accept your request to enter voluntarily, with recent memories wiped. The rest of us back home will be observing your actions for the next 2 months. Note that once in the simulation, we will not be able to save you from any dangers you may face."
+                },
+                {
+                  "raw": "You're on your own, freq1062."
+                }
+              ],
+              "mode": "append"
+            },
+            {
+              "function": "minecraft:set_book_cover",
+              "title": "PRIME DIRECTIVE",
+              "author": "-\\\\-"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "functions": [
+            {
+              "function": "minecraft:set_book_cover",
+              "title": "2025-06-24",
+              "author": "freq1062"
+            },
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "Tomorrow I enter the experiment and leave everybody behind for two months. Everything I've worked for up until this point has been for our collective good, but for once I wonder if it was mistake to leave those closest to me behind..."
+                },
+                {
+                  "raw": "If it means understanding what they are - the Immortals, the spells, motives, strategies, potential new technologies... then I will go. But will I still recognize myself after living in a hollow mind? With everybody watching, will I betray who I thought I was all along?"
+                },
+                {
+                  "raw": "Am I still really still mortal?"
+                }
+              ],
+              "mode": "append"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "functions": [
+            {
+              "function": "minecraft:set_book_cover",
+              "title": "QUARTERLY REPORT",
+              "author": "01"
+            },
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "The experiment has gone on for 2 weeks. 's performance thus far has been lacklustre to say the least, but he was never much of a fighter. I truly admire how he keeps coming back despite losing over and over again, always refusing to succumb to power. "
+                },
+                {
+                  "raw": "Population analysis shows this is rare, as ~67% of the participants have already turned. "
+                },
+                {
+                  "raw": "From the experiment, 6 spells have been documented, and the full effects during ranges -3 to +3 corruption are now known. A new technology was discovered - \"augmentation cores\" that could greatly assist us in the real world. "
+                },
+                {
+                  "raw": "Slight hiccups in the dimensional stability detected. An unfortunate side effect of trying to squeeze the infinite complexity of space and time into the limited computational resources available to us. "
+                },
+                {
+                  "raw": "We've just been dumping the problems in the Null Space for now, but sooner or later holes may open up..."
+                }
+              ],
+              "mode": "append"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "functions": [
+            {
+              "function": "minecraft:set_book_cover",
+              "title": "QUARTERLY REPORT",
+              "author": "02"
+            },
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "Something went wrong. Although the Individual was found dead months ago, supposedly killed by the very same people who rescued him, he somehow appeared in the simulation today. "
+                },
+                {
+                  "raw": "Not only that, but the holes we hoped would never open to the Null Space have opened, and we have no way to do anything without ending the experiment early."
+                },
+                {
+                  "raw": "So much crucial data has been recovered - Talismen, artificial hearts, the dragon egg and Phasebreaker... it would be a real shame to end the experiment here."
+                },
+                {
+                  "raw": "I believe he would want the simulation to continue, and every time I check in he's still the same unwavering mortal as always. I really hope he doesn't face the one he hates the most..."
+                }
+              ],
+              "mode": "append"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:written_book",
+          "functions": [
+            {
+              "function": "minecraft:set_book_cover",
+              "title": "QUARTERLY REPORT",
+              "author": "03char"
+            },
+            {
+              "function": "minecraft:set_written_book_pages",
+              "pages": [
+                {
+                  "raw": "What intrigues me the most about the participants is their desire to become \"the strongest\". Notable feats include:"
+                },
+                {
+                  "raw": "\"EliteSodium\": Immediately went Immortal, but some kind of bug in the system caused them to return to mortal. Then they decided again to become Immortal for the second time?! This participant is deeply unsettling."
+                },
+                {
+                  "raw": "\"Emwald\": Although this participant was admitted late, they are undoubtedly the most skilled and knowledgeable in combat. It is truly worrying that they decided to choose to go Immortal, despite all the amazing data they've provided..."
+                },
+                {
+                  "raw": "\"Bobmorgon\": Despite immediately going Immortal, he seems generally well liked among both mortals and immortals. This was eye opening, as previously it was thought that the two parties held some kind of innate fear for each other. But we've been proven wrong again and again."
+                },
+                {
+                  "raw": "\"Overfrosted\": For some unknown reason, this participant loves snooping around and looking for things that aren't really meant to be found. Sooner or later my words might even be read by them. "
+                },
+                {
+                  "raw": "From what we can tell, this is the only other participant who decided to stay mortal despite having the choice to become Immortal. I wonder what they hope to achieve..."
+                },
+                {
+                  "raw": "\"pvpgods2\": This participant is a perfect fit of what we imagined Immortals to be, given a blank slate. Despite being generally disliked by players though, he remains generally loyal and sometimes even cooperative. Maybe there is some hope after all?"
+                }
+              ],
+              "mode": "append"
+            }
+          ]
+        }
+      ],
+      "functions": []
+    }
+  ]
+}

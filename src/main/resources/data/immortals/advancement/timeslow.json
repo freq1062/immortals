@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:timekeeper"
+    },
+    "title": "Timekeeper",
+    "description": "Acquire the Timekeeper, allowing you to harness the power of time.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:immortals",
+  "criteria": {
+    "timeslow": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["timeslow"]
+  ]
+}

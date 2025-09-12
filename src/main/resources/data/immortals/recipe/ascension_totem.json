@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "category": "misc",
+    "ingredients": [
+      "minecraft:totem_of_undying",
+      "immortals:ascension_relic"
+    ],
+    "result": {
+      "id": "immortals:ascension_totem",
+      "count": 1
+    }
+  }

@@ -1,0 +1,41 @@
+{
+	"schemaVersion": 1,
+	"id": "immortals",
+	"version": "${version}",
+	"name": "Immortals",
+	"description": "There are two types of players in this mod: Mortals and Immortals.",
+	"authors": [
+		"freq1062"
+	],
+	"contact": {
+		"homepage": "https://github.com/freq1062",
+		"sources": "https://github.com/freq1062"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/immortals/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"name.modid.Immortals"
+		],
+		"client": [
+			"name.modid.ImmortalsClient"
+		]
+	},
+	"mixins": [
+		"immortals.mixins.json",
+		{
+			"config": "immortals.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.17.2",
+		"minecraft": "~1.21.8",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}

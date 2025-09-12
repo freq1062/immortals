@@ -1,0 +1,14 @@
+{
+  "structures": [
+    {
+      "structure": "immortals:immortal_statue",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "spacing": 14,
+    "separation": 8,
+    "salt": 610982375
+  }
+}

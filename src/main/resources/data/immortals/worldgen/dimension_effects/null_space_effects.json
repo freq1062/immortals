@@ -1,0 +1,10 @@
+{
+  "fog_color": [0.05, 0.05, 0.05],
+  "sky_type": "none",
+  "clouds": false,
+  "alternate_sky_color": false,
+  "fog_thickness": 1.0,
+  "music": null,
+  "particle": null,
+  "sound": null
+}

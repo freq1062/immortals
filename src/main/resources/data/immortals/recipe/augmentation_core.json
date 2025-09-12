@@ -1,0 +1,18 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+        " D ",
+        "SNS",
+        " E "
+    ],
+    "key": {
+        "D": "minecraft:nether_star",
+        "S": "minecraft:dragon_breath",
+        "N": "immortals:artificial_heart",
+        "E": "minecraft:netherite_ingot"
+    },
+    "result": {
+        "id": "immortals:augmentation_core",
+        "count": 2
+    }
+}

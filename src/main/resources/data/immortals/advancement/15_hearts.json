@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:heart"
+    },
+    "title": "Survivalist",
+    "description": "Obtain 15 max hearts as a Mortal.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:mortals",
+  "criteria": {
+    "15_hearts": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["15_hearts"]
+  ]
+}

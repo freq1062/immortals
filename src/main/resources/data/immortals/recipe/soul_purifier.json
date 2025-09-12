@@ -1,0 +1,18 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+      "AAA",
+      "DBD",
+      "CCC"
+    ],
+    "key": {
+      "A": "minecraft:ghast_tear",
+      "B": "immortals:ascension_relic",
+      "C": "minecraft:echo_shard",
+      "D": "minecraft:netherite_scrap"
+    },
+    "result": {
+      "id": "immortals:soul_purifier",
+      "count": 1
+    }
+  }

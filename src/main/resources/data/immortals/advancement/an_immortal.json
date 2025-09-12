@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:ascension_totem"
+    },
+    "title": "An Immortal",
+    "description": "Ascended to become an Immortal player.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:immortals",
+  "criteria": {
+    "an_immortal": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["an_immortal"]
+  ]
+}

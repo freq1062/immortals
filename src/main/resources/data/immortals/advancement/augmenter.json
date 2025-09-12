@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "immortals:augmentation_core"
+    },
+    "title": "Augmenter",
+    "description": "Use an Augmentation Core to upgrade your gear.",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "immortals:mortals",
+  "criteria": {
+    "augmenter": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["augmenter"]
+  ]
+}

@@ -1,0 +1,13 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "category": "misc",
+    "ingredients": [
+      "immortals:heart",
+      "immortals:soul_purifier",
+      "immortals:ascension_relic"
+    ],
+    "result": {
+      "id": "immortals:soul_shard",
+      "count": 1
+    }
+  }

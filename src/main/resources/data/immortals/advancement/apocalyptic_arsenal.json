@@ -1,0 +1,71 @@
+{
+    "display": {
+        "icon": {
+            "id": "minecraft:barrier"
+        },
+        "title": "An Apocalyptic Arsenal",
+        "description": "If you're seeing this, you're cooked. Obtained all three mythical weapons.",
+        "frame": "challenge",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "immortals:base",
+    "criteria": {
+        "has_mace": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "items": ["minecraft:mace"]
+                    }
+                ]
+            }
+        },
+        "has_dragon_egg": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "items": ["minecraft:dragon_egg"]
+                    }
+                ]
+            }
+        },
+        "has_phasebreaker": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "items": ["immortals:phasebreaker"]
+                    }
+                ]
+            }
+        },
+        "has_timekeeper": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "items": ["immortals:timekeeper"]
+                    }
+                ]
+            }
+        },
+        "has_chronoreaver": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "items": ["immortals:chronoreaver"]
+                    }
+                ]
+            }
+        }
+    },
+    "requirements": [
+        ["has_mace"],
+        ["has_dragon_egg", "has_phasebreaker"],
+        ["has_timekeeper", "has_chronoreaver"]
+    ]
+}
