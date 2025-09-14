@@ -30,6 +30,7 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 
+import com.immortals.Immortal.Immortals;
 import com.immortals.Immortal.SpellRegistry;
 import com.immortals.api.ImmortalsData;
 
@@ -78,8 +79,7 @@ public class Utils {
             case DASH, GLOW -> 1;
             case BLACKOUT, FROSTBITE -> 2;
             case PERSIST, SPLINTER_BLOW -> 3;
-            case ECHO, SHRINK -> 4;
-            case SURGE, LOCK -> 5;
+            case FRAGMENT -> 5;
             default -> 0;
         };
     }
@@ -129,6 +129,33 @@ public class Utils {
             }
         }
         return null;
+    }
+
+    public static void spawnFragment(ServerPlayerEntity sp, ServerWorld world) {
+        ImmortalsData user = (ImmortalsData) sp;
+        System.out.println("Number of fragments left: " + user.getRemainingFragments());
+        if (user.getRemainingFragments() > 0) {
+            // Spawn fragments for fragment spell
+            // Spawn a coal block as a fragment
+            net.minecraft.entity.FallingBlockEntity fragment = net.minecraft.entity.FallingBlockEntity
+                    .spawnFromBlock(
+                            world,
+                            sp.getBlockPos(),
+                            net.minecraft.block.Blocks.COAL_BLOCK.getDefaultState());
+
+            // Position at player's eye level
+            fragment.setPosition(sp.getX(), sp.getEyeY() - 0.1, sp.getZ());
+            // Send in direction player is looking
+            fragment.setVelocity(sp.getRotationVector().multiply(1.5));
+            // Prevent normal falling block behavior
+            fragment.setNoGravity(true);
+            fragment.dropItem = false;
+
+            world.spawnEntity(fragment);
+            // Collision handled in Immortals.java
+            Immortals.fragments.put(sp, fragment);
+            user.setRemainingFragments(user.getRemainingFragments() - 1);
+        }
     }
 
     // Dragon ascent breath particles at pos

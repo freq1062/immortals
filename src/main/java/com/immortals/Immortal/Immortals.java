@@ -20,7 +20,9 @@ import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.entity.FallingBlockEntity;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
@@ -29,9 +31,42 @@ import java.util.UUID;
 
 /*Implements the Immortals' corruption system.*/
 public class Immortals {
+
+    public static final java.util.Map<ServerPlayerEntity, FallingBlockEntity> fragments = new java.util.HashMap<>();
+
     public static void register() {
         // Passive abilities and spell activation
         ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+            // Fragment spell collision
+            for (var entry : fragments.entrySet()) {
+                ServerPlayerEntity sp = entry.getKey();
+                FallingBlockEntity fragment = entry.getValue();
+                if (fragment.isRemoved()) {
+                    fragments.entrySet().removeIf(e -> e.getValue().equals(fragment));
+                }
+
+                ServerWorld world = (ServerWorld) fragment.getWorld();
+                // Check for entity collisions
+                world.getOtherEntities(fragment, fragment.getBoundingBox().expand(0.1),
+                        entity -> entity != sp).forEach(hitEntity -> {
+                            if (hitEntity instanceof net.minecraft.entity.LivingEntity livingEntity) {
+                                livingEntity.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) sp),
+                                        (float) Main.CONFIG.getDouble("fragmentDmg"));
+                                fragment.remove(Entity.RemovalReason.DISCARDED);
+                            }
+                        });
+
+                // Check for block collisions
+                if (fragment.horizontalCollision || fragment.verticalCollision) {
+                    fragment.remove(Entity.RemovalReason.DISCARDED);
+                }
+
+                // Remove fragment after 5 seconds
+                if (fragment.age > 100) {
+                    fragment.remove(Entity.RemovalReason.DISCARDED);
+                }
+            }
+
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
                 // Grant haste 2 if player has Timekeeper or Chronoreaver
                 if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != null
@@ -86,8 +121,7 @@ public class Immortals {
                     || !(victim instanceof ServerPlayerEntity tp))
                 return ActionResult.PASS;
 
-            // Check if attacker is an ascended player with Splinter Blow and it was a full
-            // swing
+            // Check if attacker is an ascended player and it was a full swing
             if (world.isClient || !((ImmortalsData) sp).isImmortal()
                     || sp.getAttackCooldownProgress(0.5F) < 0.84F)
                 return ActionResult.PASS;
@@ -98,20 +132,11 @@ public class Immortals {
             }
             ImmortalsData user = (ImmortalsData) attacker;
 
-            // Accumulate damage for Surge
-            float accumulatedDamage = (float) user.getAccumulatedDamage();
-            if (accumulatedDamage > 0) {
-                float attackDamage = (float) attacker.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE).getValue();
-                user.setAccumulatedDamage(accumulatedDamage + attackDamage);
-            }
-
             // Activate on-hit spell if set
             String onHitSpell = user.onHitSpell();
             if (onHitSpell != "") {
                 switch (onHitSpell) {
                     case "frostbite" -> SpellRegistry.FROSTBITE.activate(sp, tp);
-                    case "echo" -> SpellRegistry.ECHO.activate(sp, tp);
-                    case "lock" -> SpellRegistry.LOCK.activate(sp, tp);
                     default -> {
                         // Invalid spell, do nothing
                         return ActionResult.PASS;
@@ -423,12 +448,12 @@ public class Immortals {
                         }
                         case 4 -> {
                             player.sendMessage(
-                                    Text.literal("Unlocked shrink and echo!"),
+                                    Text.literal("Unlocked nothing idk!"),
                                     true);
                         }
                         case 5 -> {
                             player.sendMessage(
-                                    Text.literal("Unlocked surge and lock!"),
+                                    Text.literal("Unlocked fragment and lock!"),
                                     true);
                         }
                         default -> {

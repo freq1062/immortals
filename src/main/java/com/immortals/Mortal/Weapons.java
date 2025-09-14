@@ -301,7 +301,6 @@ public class Weapons {
 
             UUID id = sp.getUuid();
             int count = fractalCount.getOrDefault(id, 0) + 1;
-            System.out.println("Fractal Edge count for " + sp.getName().getString() + ": " + count);
             fractalCount.put(id, count);
 
             if (count >= 7) {

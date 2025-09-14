@@ -104,7 +104,7 @@ public class Spell {
                                                         || "dragon_ascent".equals(bound.getId())
                                                         || "timeslow".equals(bound.getId()))) {
                                             player.sendMessage(
-                                                    Text.literal("§cYou have " + corr
+                                                    Text.literal("§cYou have " + allowedSlots
                                                             + " available spell slots. Run /unbind [spell] to free up a slot!"),
                                                     true);
                                             return 0;

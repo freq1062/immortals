@@ -33,14 +33,5 @@ public abstract class DamageCapMixin {
                 cir.setReturnValue(capped);
             }
         }
-
-        // Reduce actual damage taken if surge is active
-        if (source.getAttacker() instanceof net.minecraft.server.network.ServerPlayerEntity attacker) {
-            ImmortalsData attackerData = (ImmortalsData) attacker;
-            if (attackerData.getAccumulatedDamage() > 0) {
-                float reducedDamage = cir.getReturnValue() * ((float) Main.CONFIG.getDouble("surgeReduction"));
-                cir.setReturnValue(reducedDamage);
-            }
-        }
     }
 }

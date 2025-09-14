@@ -338,179 +338,21 @@ public enum SpellRegistry {
         }
     },
 
-    SHRINK("shrink", Main.CONFIG.getInt("shrinkCooldown"),
+    FRAGMENT("fragment", Main.CONFIG.getInt("fragmentCooldown"),
             String.format(
                     """
-                                    For %d seconds, you shrink to %.2f scale and gain Speed III.
-                                    However, you also take %.2f× damage from all sources.
-                                    Cooldown %d seconds.
+                                    When activated, your next 3 hits summon
+                                    fragments that deal %d hearts of true damage
+                                    each. Cooldown %d seconds.
                             """,
-                    Main.CONFIG.getInt("shrinkDuration"),
-                    Main.CONFIG.getDouble("shrinkScale"),
-                    Main.CONFIG.getDouble("shrinkDamageMultiplier"),
-                    Main.CONFIG.getInt("shrinkCooldown"))) {
+                    Main.CONFIG.getInt("fragmentDmg"),
+                    Main.CONFIG.getInt("fragmentCooldown"))) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
-            double scale = Main.CONFIG.getDouble("shrinkScale");
-            user.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 20 * 10, 2, false, false));
-            user.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.SCALE).setBaseValue(scale);
-            ((ImmortalsData) user).setShrinkActive(true);
-            Main.scheduler.schedule(() -> {
-                Main.LOGGER.info("Restoring player scale");
-                user.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.SCALE).setBaseValue(1.0);
-                ((ImmortalsData) user).setShrinkActive(false);
-            }, Main.CONFIG.getInt("shrinkDuration"));
-
-            user.sendMessage(Text.literal("§aSize reduced for 10 seconds!"), true);
-        }
-    },
-
-    ECHO("echo", Main.CONFIG.getInt("echoCooldown"),
-            String.format(
-                    """
-                                    When activated, the next player you hit will
-                                    have their last cast spell copied and cast back at them.
-                                    Cooldown %d seconds.
-                            """,
-                    Main.CONFIG.getInt("echoCooldown"))) {
-        @Override
-        public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
-            String lastSpellId = ((ImmortalsData) target).getLastSpell();
-            SpellRegistry spell = SpellRegistry.fromId(lastSpellId);
-            if (spell != null) {
-                spell.activate(user, target);
-                user.sendMessage(Text.literal("§aCopied " + spell.getId() + "!"), true);
-                // Prevent infinite loops by clearing the target's last spell
-                ((ImmortalsData) target).setLastSpell("");
-            } else {
-                user.sendMessage(Text.literal("§cUnable to copy spell..."), true);
-            }
-        }
-    },
-
-    SURGE("surge", Main.CONFIG.getInt("surgeCooldown"),
-            String.format(
-                    """
-                                    For %d seconds, your attacks deal reduced damage but are
-                                    accumulated to a maximum of %.2f damage. When the duration ends,
-                                    a radius of %.2f blocks around you erupts, dealing all accumulated
-                                    damage scaled to the distance of each target.
-                                    Cooldown %d seconds.
-                            """,
-                    Main.CONFIG.getInt("surgeDuration"),
-                    Main.CONFIG.getDouble("surgeDamageCap"),
-                    Main.CONFIG.getDouble("surgeRadius"),
-                    Main.CONFIG.getInt("surgeCooldown"))) {
-        @Override
-        public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
-            ImmortalsData userData = (ImmortalsData) user;
-            double damageCap = Main.CONFIG.getDouble("surgeDamageCap");
-            ServerWorld world = (ServerWorld) user.getWorld();
-            // We set accumulated damage to 1 to indicate surge is active
-            userData.setAccumulatedDamage(1);
-
-            // Draw effects to indicate accumulated damage
-            for (var i = 0; i < (int) Main.CONFIG.getInt("surgeDuration"); i += 3) {
-                final int step = i; // Assign i to a final variable
-                Main.scheduler.schedule(() -> {
-                    double accumulatedDamage = userData.getAccumulatedDamage();
-                    Vec3d center = user.getPos().add(0, user.getStandingEyeHeight() + 0.5, 0);
-
-                    float pitch = 0.8F + (float) (accumulatedDamage / damageCap) * 0.4F; // Scale pitch based on
-                                                                                         // accumulation
-                    if (step == 0 || step == Main.CONFIG.getInt("surgeDuration") / 3
-                            || step == 2 * Main.CONFIG.getInt("surgeDuration") / 3) {
-                        world.playSound(null, user.getX(), user.getY(), user.getZ(),
-                                net.minecraft.sound.SoundEvents.BLOCK_RESPAWN_ANCHOR_CHARGE,
-                                net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, pitch);
-                    }
-
-                    if (accumulatedDamage <= damageCap / 3) {
-                        // Small flame above the player's head
-                        world.spawnParticles(ParticleTypes.FLAME, center.x, center.y, center.z, 1, 0, 0, 0, 0.01);
-                    } else if (accumulatedDamage <= (2 * damageCap) / 3) {
-                        // Larger flame and spark particles around the player
-                        world.spawnParticles(ParticleTypes.FLAME, center.x, center.y, center.z, 3, 0, 0, 0, 0.02);
-                        world.spawnParticles(ParticleTypes.GLOW, center.x, center.y - 0.5, center.z, 5, 0.5, 0.5, 0.5,
-                                0.01);
-                    } else if (accumulatedDamage < damageCap) {
-                        // Small lightning bolts and larger flame
-                        world.spawnParticles(ParticleTypes.FLAME, center.x, center.y, center.z, 5, 0, 0, 0, 0.03);
-                        for (int j = 0; j < 3; j++) {
-                            double angle = 2 * Math.PI * j / 3;
-                            double x = center.x + Math.cos(angle) * 0.5;
-                            double z = center.z + Math.sin(angle) * 0.5;
-                            world.spawnParticles(ParticleTypes.ELECTRIC_SPARK, x, center.y, z, 1, 0, 0, 0, 0.01);
-                        }
-                    } else {
-                        // Blue flame above the player's head and play lightning sound
-                        world.spawnParticles(ParticleTypes.SOUL_FIRE_FLAME, center.x, center.y, center.z, 5, 0, 0, 0,
-                                0.03);
-                        world.playSound(null, user.getX(), user.getY(), user.getZ(),
-                                net.minecraft.sound.SoundEvents.ENTITY_LIGHTNING_BOLT_THUNDER,
-                                net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-                    }
-                }, step);
-            }
-
-            Main.scheduler.schedule(() -> {
-                double accumulatedDamage = userData.getAccumulatedDamage();
-                float maxDamage = (float) Math.min(accumulatedDamage, Main.CONFIG.getDouble("surgeDamageCap"));
-                // damgeCap goes above maxDamage, so we cap it here
-                Vec3d center = user.getPos();
-                double surgeRadius = Main.CONFIG.getDouble("surgeRadius");
-
-                // Get all entities within the surge radius
-                List<LivingEntity> targets = world.getEntitiesByClass(LivingEntity.class,
-                        user.getBoundingBox().expand(surgeRadius),
-                        e -> e != user && !(e.isTeammate(user)) &&
-                                !Utils.getPlayerData(user).getTrusted().contains(e.getUuid()) &&
-                                (e instanceof HostileEntity || e instanceof ServerPlayerEntity));
-
-                for (LivingEntity t : targets) {
-                    double distance = t.getPos().distanceTo(center);
-                    double damageScale = Math.max(0.5, 1.0 - (distance / surgeRadius)); // Scale damage (min 50%)
-                    float scaledDamage = (float) (maxDamage * damageScale);
-
-                    t.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) user), scaledDamage);
-
-                    // Spawn particles at the target's position
-                    Vec3d targetPos = t.getPos().add(0, t.getStandingEyeHeight() * 0.5, 0);
-                    world.spawnParticles(ParticleTypes.EXPLOSION, targetPos.x, targetPos.y, targetPos.z, 5, 0.2, 0.2,
-                            0.2, 0.1);
-                }
-
-                // Play sound and reset accumulated damage
-                world.playSound(null, user.getX(), user.getY(), user.getZ(),
-                        net.minecraft.sound.SoundEvents.ENTITY_GENERIC_EXPLODE,
-                        net.minecraft.sound.SoundCategory.PLAYERS,
-                        1.0F, 1.0F);
-                user.sendMessage(Text.literal("§aSurge unleashed!"), true);
-                userData.setAccumulatedDamage(0);
-            }, Main.CONFIG.getInt("surgeDuration"));
-        }
-
-    },
-
-    LOCK("lock", Main.CONFIG.getInt("lockCooldown"), String.format("""
-                    When activated, the next player you hit will
-                    have their currently selected main hand item
-                    locked for %d seconds.
-                    Cooldown %d seconds.
-            """, Main.CONFIG.getInt("lockDuration"), Main.CONFIG.getInt("lockCooldown"))) {
-
-        @Override
-        public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
-            // Apply cooldown to the target's currently selected item
-            if (target != null && target.getMainHandStack() != null) {
-                ItemStack selectedItem = target.getMainHandStack().isEmpty() ? target.getOffHandStack()
-                        : target.getMainHandStack();
-                if (!selectedItem.isEmpty()) {
-                    int duration = Main.CONFIG.getInt("lockDuration");
-                    target.getItemCooldownManager().set(selectedItem, duration);
-                }
-            }
-            user.sendMessage(Text.literal("§aOpponent's item locked!"), true);
+            ImmortalsData data = (ImmortalsData) user;
+            data.setRemainingFragments(3);
+            // Actual fragments are spawned in player swing mixin and Utils.spawnFragment()
+            user.sendMessage(Text.literal("§dPunch to launch fragments!"), true);
         }
     },
 
@@ -899,7 +741,7 @@ public enum SpellRegistry {
             return false;
 
         // On hit spell types have delayed activation handled in Immortals.java
-        if (spell == SpellRegistry.FROSTBITE || spell == SpellRegistry.ECHO || spell == SpellRegistry.LOCK) {
+        if (spell == SpellRegistry.FROSTBITE) {
             ((ImmortalsData) player).setOnHitSpell(spell.getId());
             player.sendMessage(Text.literal("§a" + spell.getDisplayName() + " will activate on your next hit!"), true);
             return false;

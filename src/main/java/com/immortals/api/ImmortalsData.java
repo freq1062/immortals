@@ -41,11 +41,11 @@ public interface ImmortalsData {
 
     void setLastSpell(String spellId);
 
-    // Surge: stores accumulated damage
+    // Fragment: stores the number of remaining fragments
 
-    double getAccumulatedDamage();
+    int getRemainingFragments();
 
-    void setAccumulatedDamage(float newAmt);
+    void setRemainingFragments(int newAmt);
 
     // Combo count on target: [UUID, combo count, last hit time]
     Map<UUID, Pair<Integer, Long>> getComboCounts();

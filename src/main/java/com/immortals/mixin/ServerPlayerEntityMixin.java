@@ -39,7 +39,7 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
     @Unique
     private String last_spell = "";
     @Unique
-    private double accumulatedDamage = 0.0;
+    private int remainingFragments = 0;
     @Unique
     private final Map<UUID, Pair<Integer, Long>> combo_counts = new HashMap<>();
 
@@ -53,7 +53,7 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
         on_hit_spell = view.getString("Immortals:OnHitSpell", "");
         shrink_active = view.getBoolean("Immortals:ShrinkActive", false);
         last_spell = view.getString("Immortals:LastSpell", "");
-        accumulatedDamage = view.getDouble("Immortals:AccumulatedDamage", 0.0);
+        remainingFragments = view.getInt("Immortals:RemainingFragments", 0);
 
         // trusted: typed list of strings (UUID strings)
         view.getOptionalTypedListView("Immortals:Trusted", Codec.STRING).ifPresent(list -> {
@@ -100,7 +100,7 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
         view.putString("Immortals:OnHitSpell", on_hit_spell);
         view.putBoolean("Immortals:ShrinkActive", shrink_active);
         view.putString("Immortals:LastSpell", last_spell);
-        view.putDouble("Immortals:AccumulatedDamage", accumulatedDamage);
+        view.putInt("Immortals:RemainingFragments", remainingFragments);
 
         // trusted: typed list of strings
         var trustedAppender = view.getListAppender("Immortals:Trusted", Codec.STRING);
@@ -176,13 +176,13 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
     }
 
     @Override
-    public double getAccumulatedDamage() {
-        return accumulatedDamage;
+    public int getRemainingFragments() {
+        return remainingFragments;
     }
 
     @Override
-    public void setAccumulatedDamage(float newAmt) {
-        accumulatedDamage = newAmt;
+    public void setRemainingFragments(int newAmt) {
+        remainingFragments = newAmt;
     }
 
     @Override
