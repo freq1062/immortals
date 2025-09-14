@@ -9,6 +9,7 @@ import java.util.List;
 
 import com.immortals.Utils;
 import com.immortals.ModItems;
+import com.immortals.Main;
 import com.immortals.api.ImmortalsData;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -97,7 +98,8 @@ public class Spell {
                                         SpellRegistry bound = SpellRegistry.getBound(player, slot);
                                         // Refuse if the player doesn't have enough slots and is not replacing a
                                         // non-free spell (dragon ascent and timeslow)
-                                        if (corr <= SpellRegistry.getNumBound(player)
+                                        int allowedSlots = Math.min(corr, Main.CONFIG.getInt("maxSpellSlots"));
+                                        if (allowedSlots <= SpellRegistry.getNumBound(player)
                                                 && (bound == null
                                                         || "dragon_ascent".equals(bound.getId())
                                                         || "timeslow".equals(bound.getId()))) {

@@ -184,7 +184,7 @@ public enum SpellRegistry {
             String.format(
                     """
                                     When activated, all untrusted players within %.2f blocks
-                                    are inflicted with Blindness for %d seconds and
+                                    are inflicted with darkness for %d seconds and
                                     have their abilities disabled for %d seconds.
                                     Mortals are unaffected. %d s cooldown.
                             """,
@@ -200,12 +200,12 @@ public enum SpellRegistry {
             // Apply blindness to untrusted players within radius
             for (ServerPlayerEntity other : world.getPlayers()) {
                 if (other.squaredDistanceTo(user) <= radius * radius) {
-                    if (other == user || other.isTeammate(user)
+                    if (other == user || other.isTeammate(user) || !((ImmortalsData) other).isImmortal()
                             || Utils.getPlayerData(user).getTrusted().contains(other.getUuid())) {
                         return;
                     } else {
                         // Add blindness effect and disable abilities
-                        other.addStatusEffect(new StatusEffectInstance(StatusEffects.BLINDNESS,
+                        other.addStatusEffect(new StatusEffectInstance(StatusEffects.DARKNESS,
                                 Main.CONFIG.getInt("blackoutBlind"), 0, false, true));
 
                         ((ImmortalsData) other).setAbilitiesDisabled(true);
@@ -229,7 +229,8 @@ public enum SpellRegistry {
                     double x = user.getX() + Math.cos(angle) * r;
                     double z = user.getZ() + Math.sin(angle) * r;
                     double y = user.getY() + 1.0;
-                    world.spawnParticles(ParticleTypes.SMOKE, x, y, z, 2, 0, 0, 0, 0.05);
+                    DustParticleEffect blackDust = new DustParticleEffect(0x000000, 1f);
+                    world.spawnParticles(blackDust, x, y, z, 2, 0.0, 0.0, 0.0, 0.05);
                 }
             }
 
@@ -668,10 +669,15 @@ public enum SpellRegistry {
                                     || entity.getType().toString().contains("snowball")
                                     || entity.getType().toString().contains("wind_charge")
                                     || entity.getType().toString().contains("projectile")) {
-                                Main.api.rateEntity(entity, 1);
+                                try {
+                                    Main.api.rateEntity(entity, 1);
+                                } catch (Exception e) {
+                                    Main.LOGGER.error("Failed to set tickrate for projectile: " + e.getMessage());
+                                }
                             } else {
-                                Main.api.rateEntity(entity, 5);
-                                if (Main.api.queryEntity(entity) != 5) {
+                                try {
+                                    Main.api.rateEntity(entity, 5);
+                                } catch (Exception e) {
                                     // If entity doesn't have tickrate apply slowness and fatigue instead
                                     target.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS,
                                             checkInterval, 4, false, false));
@@ -685,7 +691,13 @@ public enum SpellRegistry {
                     // Restore tickrate for entities that left the zone
                     slowedEntities.removeIf(entity -> {
                         if (entity == null || entity.squaredDistanceTo(effectCenter) > radius * radius) {
-                            Main.api.rateEntity(entity, 20);
+                            if (entity != null) {
+                                try {
+                                    Main.api.rateEntity(entity, 20);
+                                } catch (Exception e) {
+                                    Main.LOGGER.error("Failed to reset tickrate: " + e.getMessage());
+                                }
+                            }
                             return true;
                         }
                         return false;
@@ -700,7 +712,11 @@ public enum SpellRegistry {
                         net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 0.5F);
                 Utils.updateRune(user, "timeslow", 0);
                 for (Entity entity : slowedEntities) {
-                    Main.api.rateEntity(entity, 20);
+                    try {
+                        Main.api.rateEntity(entity, 20);
+                    } catch (Exception e) {
+                        Main.LOGGER.error("Failed to reset tickrate: " + e.getMessage());
+                    }
                 }
                 slowedEntities.clear();
             }, (numChecks + 1) * checkInterval);

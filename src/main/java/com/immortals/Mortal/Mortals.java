@@ -159,7 +159,7 @@ public class Mortals {
             ItemStack stack = player.getStackInHand(hand);
             ImmortalsData data = (ImmortalsData) player;
             if (data.isImmortal()) {
-                return ActionResult.FAIL;
+                return ActionResult.PASS;
             }
 
             if (stack.getItem() == ModItems.HEART) {

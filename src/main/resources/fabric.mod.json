@@ -17,6 +17,9 @@
 	"entrypoints": {
 		"main": [
 			"com.immortals.Main"
+		],
+		"client": [
+			"com.immortals.ImmortalsClient"
 		]
 	},
 	"mixins": [

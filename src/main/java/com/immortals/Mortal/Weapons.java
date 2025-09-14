@@ -269,10 +269,13 @@ public class Weapons {
         });
 
         // Fractal Edge ability
-        AttackEntityCallback.EVENT.register((player, world, hand, target, hitResult) -> {
-            if (!(player instanceof ServerPlayerEntity) || !((ImmortalsData) player).isImmortal())
+        AttackEntityCallback.EVENT.register((attacker, world, hand, victim, hitResult) -> {
+            if (!(attacker instanceof ServerPlayerEntity sp)
+                    || !(victim instanceof ServerPlayerEntity))
                 return ActionResult.PASS;
-            ServerPlayerEntity sp = (ServerPlayerEntity) player;
+
+            if (!((ImmortalsData) attacker).isImmortal())
+                return ActionResult.PASS;
 
             ItemStack weapon = sp.getStackInHand(hand);
             if (weapon.getItem() != ModItems.PHASEBREAKER)
@@ -285,7 +288,7 @@ public class Weapons {
             }
             // Pass if the target is blocking with a shield AND the attack is coming from
             // the front
-            if (target instanceof LivingEntity living && living.isBlocking()) {
+            if (victim instanceof LivingEntity living && living.isBlocking()) {
                 // Check if attacker is in front of the shielded entity
                 Vec3d attackerToTarget = sp.getPos().subtract(living.getPos()).normalize();
                 Vec3d targetLook = living.getRotationVec(1.0F).normalize();
@@ -302,19 +305,19 @@ public class Weapons {
             fractalCount.put(id, count);
 
             if (count >= 7) {
-                if (target instanceof LivingEntity ent) {
+                if (victim instanceof LivingEntity ent) {
                     // Propel target 5 blocks away
                     Vec3d dir = ent.getPos().subtract(sp.getPos()).normalize();
                     ent.setVelocity(dir.x * 2.5, 0.5, dir.z * 2.5);
                     ent.velocityModified = true;
 
-                    float maxHealth = (target instanceof LivingEntity le) ? le.getMaxHealth() : 20.0f;
+                    float maxHealth = (victim instanceof LivingEntity le) ? le.getMaxHealth() : 20.0f;
                     float damage = maxHealth * ((Number) Main.CONFIG.getDouble("fractalTotalDmg")).floatValue() / 4.0f;
                     for (int i = 0; i < 4; i++) {
                         final int index = i;
                         int delay = index * 500;
                         Main.scheduler.schedule(() -> {
-                            ent.damage((ServerWorld) world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) player),
+                            ent.damage((ServerWorld) world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) attacker),
                                     damage);
 
                             // Spawn sweep attack particles in front of the entity
@@ -326,7 +329,7 @@ public class Weapons {
                                             ParticleTypes.SWEEP_ATTACK,
                                             particlePos.x, particlePos.y + ent.getHeight() * 0.5, particlePos.z,
                                             3, 0.5, 0.5, 0.5, 0.0);
-                                    world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                                    world.playSound(null, attacker.getX(), attacker.getY(), attacker.getZ(),
                                             net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP,
                                             net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
                                 }, j * (500 / 3));

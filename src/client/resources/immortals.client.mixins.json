@@ -1,9 +1,8 @@
 {
 	"required": true,
-	"package": "name.modid.mixin.client",
+	"package": "com.immortals.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"ExampleClientMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

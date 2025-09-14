@@ -82,9 +82,13 @@ public class Immortals {
 
         // Splinter blow and on-hit spell type activations
         AttackEntityCallback.EVENT.register((attacker, world, hand, victim, hitResult) -> {
+            if (!(attacker instanceof ServerPlayerEntity sp)
+                    || !(victim instanceof ServerPlayerEntity tp))
+                return ActionResult.PASS;
+
             // Check if attacker is an ascended player with Splinter Blow and it was a full
             // swing
-            if (world.isClient || !(attacker instanceof ServerPlayerEntity sp) || !((ImmortalsData) sp).isImmortal()
+            if (world.isClient || !((ImmortalsData) sp).isImmortal()
                     || sp.getAttackCooldownProgress(0.5F) < 0.84F)
                 return ActionResult.PASS;
 
@@ -93,7 +97,6 @@ public class Immortals {
                 return ActionResult.PASS;
             }
             ImmortalsData user = (ImmortalsData) attacker;
-            ServerPlayerEntity target = (ServerPlayerEntity) victim;
 
             // Accumulate damage for Surge
             float accumulatedDamage = (float) user.getAccumulatedDamage();
@@ -106,9 +109,9 @@ public class Immortals {
             String onHitSpell = user.onHitSpell();
             if (onHitSpell != "") {
                 switch (onHitSpell) {
-                    case "frostbite" -> SpellRegistry.FROSTBITE.activate(sp, target);
-                    case "echo" -> SpellRegistry.ECHO.activate(sp, target);
-                    case "lock" -> SpellRegistry.LOCK.activate(sp, target);
+                    case "frostbite" -> SpellRegistry.FROSTBITE.activate(sp, tp);
+                    case "echo" -> SpellRegistry.ECHO.activate(sp, tp);
+                    case "lock" -> SpellRegistry.LOCK.activate(sp, tp);
                     default -> {
                         // Invalid spell, do nothing
                         return ActionResult.PASS;
@@ -122,7 +125,7 @@ public class Immortals {
             if (SpellRegistry.getSlot(sp, SpellRegistry.SPLINTER_BLOW) == -1)
                 return ActionResult.PASS;
 
-            UUID targetId = target.getUuid();
+            UUID targetId = tp.getUuid();
             // Check if it's been more than 3 seconds since the last hit
             long currentTime = System.currentTimeMillis();
             long lastTime = user.getLastHitTime(targetId);
@@ -139,7 +142,7 @@ public class Immortals {
 
             user.resetLastHitTime(targetId);
             // Success and resetting in .activate()
-            SpellRegistry.tryActivate(sp, target, SpellRegistry.getSlot(sp, SpellRegistry.SPLINTER_BLOW));
+            SpellRegistry.tryActivate(sp, tp, SpellRegistry.getSlot(sp, SpellRegistry.SPLINTER_BLOW));
             return ActionResult.PASS;
         });
 
@@ -150,24 +153,6 @@ public class Immortals {
                 UUID id = source.getAttacker().getUuid();
                 ((ImmortalsData) sp).setComboCount(id, 0);
             }
-        });
-
-        // On-hit spell controller
-        AttackEntityCallback.EVENT.register((attacker, world, hand, victim, hitResult) -> {
-            if (world.isClient || !(attacker instanceof ServerPlayerEntity sp)
-                    || !(victim instanceof ServerPlayerEntity)
-                    || !((ImmortalsData) sp).isImmortal())
-                return ActionResult.PASS;
-            ImmortalsData user = (ImmortalsData) attacker;
-
-            if (user.onHitSpell().isEmpty())
-                return ActionResult.PASS;
-            int slot = SpellRegistry.getSlot(sp, SpellRegistry.fromId(user.onHitSpell()));
-            if (slot == -1)
-                return ActionResult.PASS;
-            SpellRegistry.tryActivate(sp, (ServerPlayerEntity) victim, slot);
-            user.setOnHitSpell("");
-            return ActionResult.PASS;
         });
 
         // Initialize the scoreboard objectives for timeslow, immortal and dragon_ascent
@@ -250,7 +235,11 @@ public class Immortals {
         ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
             // Get the player's UUID and reset their tick rate
             ImmortalsData newPlayerData = (ImmortalsData) newPlayer;
-            Main.api.rateEntity(newPlayer, 20);
+            try {
+                Main.api.rateEntity(newPlayer, 20);
+            } catch (Exception e) {
+                Main.LOGGER.error("Failed to reset tickrate: " + e.getMessage());
+            }
             // Lose a heart if on -1 or lower corruption
             int corr = newPlayerData.getCorruption();
             if (newPlayerData.isImmortal() && corr > -3) {
@@ -354,7 +343,6 @@ public class Immortals {
                         case 19, 20 -> start_level = 5;
                         default -> start_level = 0;
                     }
-                    System.out.println(curr_hp + " hearts, starting at " + start_level + " corruption.");
                     EntityAttributeInstance maxHearts = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                     maxHearts.setBaseValue(20.0);
 

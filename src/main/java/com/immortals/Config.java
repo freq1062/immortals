@@ -72,7 +72,9 @@ public class Config {
                 new ConfigOption("overclockDuration", 400, "Duration of overclock ability (ticks)"),
                 new ConfigOption("blinkCooldown", 800, "Cooldown for blink ability (ticks)"),
                 new ConfigOption("blinkDuration", 100, "Duration of blink ability (ticks)"),
-                new ConfigOption("supplyDropWebhookURL", "", "Webhook URL for supply drops (leave empty to disable)"));
+                new ConfigOption("supplyDropWebhookURL", "", "Webhook URL for supply drops (leave empty to disable)"),
+                new ConfigOption("maxSpellSlots", 3,
+                        "Maximum number of spell slots. Still based on corruption"));
     }
 
     /* ========== Loading / saving ========== */
