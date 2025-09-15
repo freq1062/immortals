@@ -349,9 +349,48 @@ public enum SpellRegistry {
                     Main.CONFIG.getInt("fragmentCooldown"))) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
-            ImmortalsData data = (ImmortalsData) user;
-            data.setRemainingFragments(3);
-            // Actual fragments are spawned in player swing mixin and Utils.spawnFragment()
+            ServerWorld world = (ServerWorld) user.getWorld();
+            for (int i = 0; i < 3; i++) {
+                Main.scheduler.schedule(() -> {
+                    // Spawn fragments for fragment spell
+                    // Add a random offset to ensure unique UUIDs
+                    double offsetX = Math.random() * 0.1 - 0.05;
+                    double offsetY = Math.random() * 0.1 - 0.05;
+                    double offsetZ = Math.random() * 0.1 - 0.05;
+
+                    // Create an emerald item
+                    ItemStack emeraldStack = new ItemStack(Items.EMERALD);
+                    net.minecraft.entity.ItemEntity fragment = new net.minecraft.entity.ItemEntity(
+                            world,
+                            user.getX() + offsetX,
+                            user.getEyeY() - 0.1 + offsetY,
+                            user.getZ() + offsetZ,
+                            emeraldStack);
+
+                    // If target is provided, point towards them, otherwise use player's look
+                    // direction
+                    Vec3d direction;
+                    if (target != null) {
+                        // Calculate direction vector from user to target
+                        Vec3d targetPos = target.getPos().add(0, target.getStandingEyeHeight() / 2, 0);
+                        Vec3d userPos = user.getPos().add(0, user.getStandingEyeHeight() / 2, 0);
+                        direction = targetPos.subtract(userPos).normalize();
+                    } else {
+                        // Fallback to player's look direction
+                        direction = user.getRotationVector();
+                    }
+
+                    // Set velocity towards target or direction player is looking
+                    fragment.setVelocity(direction.multiply(1.5));
+                    fragment.setNoGravity(true);
+                    // Prevent pickup for 1.5 seconds (30 ticks)
+                    fragment.setPickupDelay(30);
+
+                    world.spawnEntity(fragment);
+                    // Collision handled in Immortals.java
+                    Immortals.fragments.put(user, fragment);
+                }, i * 15); // 15 ticks apart
+            }
             user.sendMessage(Text.literal("§dPunch to launch fragments!"), true);
         }
     },
@@ -596,7 +635,7 @@ public enum SpellRegistry {
     }
 
     public String getDescription() {
-        return description;
+        return description.replace("\n", " ");
     }
 
     /** The unique identifier players will use in `/bind ...` */

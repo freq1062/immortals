@@ -37,17 +37,10 @@ public class Spell {
                                         ServerPlayerEntity player = ctx.getSource().getPlayer();
                                         int corr = ((ImmortalsData) player).getCorruption();
                                         List<String> suggestions = new ArrayList<>();
-                                        String[][] spellsByCorr = {
-                                                { "dash", "glow" },
-                                                { "frostbite", "blackout" },
-                                                { "persist", "splinter_blow" },
-                                                { "echo", "shrink" },
-                                                { "surge", "lock" }
-                                        };
 
-                                        for (int i = 0; i < spellsByCorr.length; i++) {
+                                        for (int i = 0; i < Utils.spellsByCorr.length; i++) {
                                             if (corr >= i + 1) {
-                                                suggestions.addAll(List.of(spellsByCorr[i]));
+                                                suggestions.addAll(List.of(Utils.spellsByCorr[i]));
                                             }
                                         }
 

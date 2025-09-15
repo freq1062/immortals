@@ -6,7 +6,7 @@
 	"mixins": [
 	  "DamageCapMixin",
 	  "FallDamageImmunityMixin",
-	  "PlayerSwingMixin",
+	  "ActiveTargetGoalMixin",
 	  "ServerPlayerEntityMixin"
 	],
 	"injectors": {

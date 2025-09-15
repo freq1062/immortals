@@ -46,6 +46,16 @@ public class Mortals {
         // Register events and logic
 
         ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+
+            // Loop through all players and apply effects
+            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                if (!((ImmortalsData) player).isImmortal()) {
+                    player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                            net.minecraft.entity.effect.StatusEffects.HERO_OF_THE_VILLAGE, 60, 2)); // Hero of the
+                                                                                                    // Village III
+                }
+            }
+
             for (ServerWorld world : server.getWorlds()) {
                 for (ExperienceOrbEntity orb : world.getEntitiesByType(
                         EntityType.EXPERIENCE_ORB, o -> !o.isRemoved())) {

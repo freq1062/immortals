@@ -176,16 +176,6 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
     }
 
     @Override
-    public int getRemainingFragments() {
-        return remainingFragments;
-    }
-
-    @Override
-    public void setRemainingFragments(int newAmt) {
-        remainingFragments = newAmt;
-    }
-
-    @Override
     public Map<UUID, Pair<Integer, Long>> getComboCounts() {
         return combo_counts;
     }

@@ -41,12 +41,6 @@ public interface ImmortalsData {
 
     void setLastSpell(String spellId);
 
-    // Fragment: stores the number of remaining fragments
-
-    int getRemainingFragments();
-
-    void setRemainingFragments(int newAmt);
-
     // Combo count on target: [UUID, combo count, last hit time]
     Map<UUID, Pair<Integer, Long>> getComboCounts();
 

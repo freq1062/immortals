@@ -13,16 +13,18 @@ import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.math.Box;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.entity.FallingBlockEntity;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
@@ -32,7 +34,7 @@ import java.util.UUID;
 /*Implements the Immortals' corruption system.*/
 public class Immortals {
 
-    public static final java.util.Map<ServerPlayerEntity, FallingBlockEntity> fragments = new java.util.HashMap<>();
+    public static final java.util.Map<ServerPlayerEntity, Entity> fragments = new java.util.HashMap<>();
 
     public static void register() {
         // Passive abilities and spell activation
@@ -40,12 +42,15 @@ public class Immortals {
             // Fragment spell collision
             for (var entry : fragments.entrySet()) {
                 ServerPlayerEntity sp = entry.getKey();
-                FallingBlockEntity fragment = entry.getValue();
+                Entity fragment = entry.getValue();
                 if (fragment.isRemoved()) {
                     fragments.entrySet().removeIf(e -> e.getValue().equals(fragment));
                 }
 
+                // Spawn red particles behind the fragment (trail effect)
                 ServerWorld world = (ServerWorld) fragment.getWorld();
+                world.spawnParticles(ParticleTypes.CRIMSON_SPORE, fragment.getX(), fragment.getY(), fragment.getZ(), 3,
+                        0.05, 0.05, 0.05, 0.01);
                 // Check for entity collisions
                 world.getOtherEntities(fragment, fragment.getBoundingBox().expand(0.1),
                         entity -> entity != sp).forEach(hitEntity -> {
@@ -68,6 +73,20 @@ public class Immortals {
             }
 
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+
+                // Make iron golems aggressive to immortal players
+                if (((ImmortalsData) player).isImmortal()) {
+                    Box searchBox = player.getBoundingBox().expand(8.0);
+                    player.getWorld().getEntitiesByType(
+                            net.minecraft.entity.EntityType.IRON_GOLEM,
+                            searchBox,
+                            golem -> true).forEach(golem -> {
+                                if (golem instanceof IronGolemEntity ironGolem) {
+                                    ironGolem.setTarget(player);
+                                }
+                            });
+                }
+
                 // Grant haste 2 if player has Timekeeper or Chronoreaver
                 if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != null
                         || Utils.inventoryHas(player, ModItems.CHRONOREAVER) != null) {
@@ -431,30 +450,10 @@ public class Immortals {
 
                     switch (corruption) {
                         case 0 -> player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0);
-                        case 1 -> {
+                        case 1, 2, 3, 4, 5 -> {
                             player.sendMessage(
-                                    Text.literal("Unlocked dash and glow!"),
-                                    true);
-                        }
-                        case 2 -> {
-                            player.sendMessage(
-                                    Text.literal("Unlocked frostbite and blackout!"),
-                                    true);
-                        }
-                        case 3 -> {
-                            player.sendMessage(
-                                    Text.literal("Unlocked persist and splinter blow!"),
-                                    true);
-                        }
-                        case 4 -> {
-                            player.sendMessage(
-                                    Text.literal("Unlocked nothing idk!"),
-                                    true);
-                        }
-                        case 5 -> {
-                            player.sendMessage(
-                                    Text.literal("Unlocked fragment and lock!"),
-                                    true);
+                                    Utils.getSpellDescriptions(corruption),
+                                    false);
                         }
                         default -> {
                         }

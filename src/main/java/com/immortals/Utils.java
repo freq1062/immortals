@@ -12,6 +12,9 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -30,7 +33,6 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 
-import com.immortals.Immortal.Immortals;
 import com.immortals.Immortal.SpellRegistry;
 import com.immortals.api.ImmortalsData;
 
@@ -119,6 +121,93 @@ public class Utils {
         }
     }
 
+    public static String[][] spellsByCorr = {
+            { "dash", "glow" },
+            { "frostbite", "blackout" },
+            { "persist", "splinter_blow" },
+            {},
+            { "fragment" }
+    };
+
+    public static Text getSpellDescriptions(int corr) {
+        // Check if the corruption level is valid
+        if (corr < 1 || corr > spellsByCorr.length) {
+            return Text.literal("No spells unlocked at this level.");
+        }
+
+        // Get the spells for the given corruption level (subtract 1 since array is
+        // 0-indexed)
+        String[] spells = spellsByCorr[corr - 1];
+
+        // If no spells at this level
+        if (spells.length == 0) {
+            return Text.literal("No spells unlocked at this level.");
+        }
+
+        MutableText message = Text.literal("Unlocked ");
+
+        // Format based on number of spells
+        if (spells.length == 1) {
+            // For a single spell
+            String spellName = spells[0];
+            SpellRegistry spell = SpellRegistry.valueOf(spellName.toUpperCase());
+            MutableText spellText = Text.literal(spellName)
+                    .styled(style -> style.withHoverEvent(
+                            new HoverEvent.ShowText(Text.literal(spell.getDescription())))
+                            .withColor(0xFFAA00)); // Gold color
+
+            return message.append(spellText).append("! Hover to see details!");
+
+        } else if (spells.length == 2) {
+            // For exactly two spells
+            String spellName1 = spells[0];
+            String spellName2 = spells[1];
+
+            SpellRegistry spell1 = SpellRegistry.valueOf(spellName1.toUpperCase());
+            SpellRegistry spell2 = SpellRegistry.valueOf(spellName2.toUpperCase());
+
+            MutableText spellText1 = Text.literal(spellName1)
+                    .styled(style -> style.withHoverEvent(
+                            new HoverEvent.ShowText(Text.literal(spell1.getDescription())))
+                            .withColor(0xFFAA00)); // Gold color
+
+            MutableText spellText2 = Text.literal(spellName2)
+                    .styled(style -> style.withHoverEvent(
+                            new HoverEvent.ShowText(Text.literal(spell2.getDescription())))
+                            .withColor(0xFFAA00)); // Gold color
+
+            return message.append(spellText1)
+                    .append(" and ")
+                    .append(spellText2)
+                    .append("! Hover to see details!");
+
+        } else {
+            // For 3 or more spells
+            for (int i = 0; i < spells.length; i++) {
+                String spellName = spells[i];
+                SpellRegistry spell = SpellRegistry.valueOf(spellName.toUpperCase());
+
+                MutableText spellText = Text.literal(spellName)
+                        .styled(style -> style.withHoverEvent(
+                                new HoverEvent.ShowText(Text.literal(spell.getDescription())))
+                                .withColor(0xFFAA00)); // Gold color
+
+                if (i == spells.length - 1) {
+                    // Last spell
+                    message.append(" and ").append(spellText);
+                } else if (i > 0) {
+                    // Middle spells
+                    message.append(", ").append(spellText);
+                } else {
+                    // First spell
+                    message.append(spellText);
+                }
+            }
+
+            return message.append("! Hover to see details!");
+        }
+    }
+
     public static Integer inventoryHas(ServerPlayerEntity player, Item item) {
         // offhand and armor slots are 0-7
         int size = player.getInventory().size();
@@ -129,33 +218,6 @@ public class Utils {
             }
         }
         return null;
-    }
-
-    public static void spawnFragment(ServerPlayerEntity sp, ServerWorld world) {
-        ImmortalsData user = (ImmortalsData) sp;
-        System.out.println("Number of fragments left: " + user.getRemainingFragments());
-        if (user.getRemainingFragments() > 0) {
-            // Spawn fragments for fragment spell
-            // Spawn a coal block as a fragment
-            net.minecraft.entity.FallingBlockEntity fragment = net.minecraft.entity.FallingBlockEntity
-                    .spawnFromBlock(
-                            world,
-                            sp.getBlockPos(),
-                            net.minecraft.block.Blocks.COAL_BLOCK.getDefaultState());
-
-            // Position at player's eye level
-            fragment.setPosition(sp.getX(), sp.getEyeY() - 0.1, sp.getZ());
-            // Send in direction player is looking
-            fragment.setVelocity(sp.getRotationVector().multiply(1.5));
-            // Prevent normal falling block behavior
-            fragment.setNoGravity(true);
-            fragment.dropItem = false;
-
-            world.spawnEntity(fragment);
-            // Collision handled in Immortals.java
-            Immortals.fragments.put(sp, fragment);
-            user.setRemainingFragments(user.getRemainingFragments() - 1);
-        }
     }
 
     // Dragon ascent breath particles at pos
