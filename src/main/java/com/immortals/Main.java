@@ -3,6 +3,7 @@ package com.immortals;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.server.MinecraftServer;
 
 import com.immortals.api.TaskScheduler;
@@ -10,6 +11,7 @@ import com.immortals.Immortal.Immortals;
 import com.immortals.Immortal.Spell;
 import com.immortals.Mortal.Mortals;
 import com.immortals.Mortal.Weapons;
+import com.immortals.network.NetworkChannels;
 import io.github.dennisochulor.tickrate.api.TickRateAPI;
 
 import java.io.IOException;
@@ -41,9 +43,14 @@ public class Main implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			// Safe to use TickRateAPI here
 			api = TickRateAPI.getInstance();
-			// Your logic here
 		});
 
+		// Register the custom payloads
+		PayloadTypeRegistry.playS2C().register(NetworkChannels.RuneS2CPayload.ID, NetworkChannels.RuneS2CPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(NetworkChannels.SphereS2CPayload.ID,
+				NetworkChannels.SphereS2CPayload.CODEC);
+
+		// Register a server tick event to process scheduled tasks
 		ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
 			scheduler.tick(server.getTicks());
 		});

@@ -51,7 +51,9 @@ public class Config {
                 new ConfigOption("shrinkScale", 0.5, "Scale factor for shrink ability (raw attribute value)"),
                 new ConfigOption("shrinkDamageMultiplier", 1.5, "Damage multiplier while shrunk"),
                 new ConfigOption("fragmentCooldown", 600, "Cooldown for fragment ability (ticks)"),
-                new ConfigOption("fragmentDmg", 1, "Number of hearts to do per fragment"),
+                new ConfigOption("fragmentDmg", 0.15, "Damage dealt by each fragment as a fraction of max HP"),
+                new ConfigOption("beamCooldown", 600, "Cooldown for beam ability (ticks)"),
+                new ConfigOption("beamDmg", 0.15, "Damage dealt by the beam as a fraction of max HP"),
                 new ConfigOption("dragonAscentRadius", 10.0, "Radius for dragon ascent ability (blocks)"),
                 new ConfigOption("dragonAscentLevitation", 60, "Levitation duration for dragon ascent (ticks)"),
                 new ConfigOption("dragonAscentTotalDmg", 0.4, "Damage dealt by dragon ascent as a fraction of max HP"),
@@ -67,7 +69,7 @@ public class Config {
                 new ConfigOption("blinkCooldown", 800, "Cooldown for blink ability (ticks)"),
                 new ConfigOption("blinkDuration", 100, "Duration of blink ability (ticks)"),
                 new ConfigOption("supplyDropWebhookURL", "", "Webhook URL for supply drops (leave empty to disable)"),
-                new ConfigOption("maxSpellSlots", 3,
+                new ConfigOption("maxSpellSlots", 5,
                         "Maximum number of spell slots. Still based on corruption"));
     }
 

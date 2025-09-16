@@ -2,6 +2,7 @@ package com.immortals.Immortal;
 
 import com.immortals.Utils;
 import com.immortals.api.ImmortalsData;
+import com.immortals.network.NetworkChannels;
 import com.immortals.ModItems;
 import com.immortals.Main;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -10,6 +11,8 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -18,14 +21,14 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleTypes;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.Box;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 
@@ -55,8 +58,10 @@ public class Immortals {
                 world.getOtherEntities(fragment, fragment.getBoundingBox().expand(0.1),
                         entity -> entity != sp).forEach(hitEntity -> {
                             if (hitEntity instanceof net.minecraft.entity.LivingEntity livingEntity) {
+                                float maxHealth = (float) livingEntity.getMaxHealth();
+                                float damage = maxHealth * ((float) Main.CONFIG.getDouble("fragmentDmg"));
                                 livingEntity.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) sp),
-                                        (float) Main.CONFIG.getDouble("fragmentDmg"));
+                                        damage);
                                 fragment.remove(Entity.RemovalReason.DISCARDED);
                             }
                         });
@@ -74,8 +79,9 @@ public class Immortals {
 
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 
-                // Make iron golems aggressive to immortal players
-                if (((ImmortalsData) player).isImmortal()) {
+                // Make iron golems aggressive to immortal players, ignoring players in
+                // spectator and creative mode
+                if (((ImmortalsData) player).isImmortal() && !player.isSpectator() && !player.isCreative()) {
                     Box searchBox = player.getBoundingBox().expand(8.0);
                     player.getWorld().getEntitiesByType(
                             net.minecraft.entity.EntityType.IRON_GOLEM,
@@ -87,24 +93,54 @@ public class Immortals {
                             });
                 }
 
-                // Grant haste 2 if player has Timekeeper or Chronoreaver
-                if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != null
-                        || Utils.inventoryHas(player, ModItems.CHRONOREAVER) != null) {
-                    player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                            net.minecraft.entity.effect.StatusEffects.HASTE, 60, 1, true, false, true));
-                }
-                // Grant +1 attack damage if player has Dragon Egg
+                // Grant +1 attack damage if player has Dragon Egg and is immortal
                 EntityAttributeInstance attackAttr = player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE);
                 double baseAttack = 1.0; // Default base value
-                if (Utils.inventoryHas(player, Items.DRAGON_EGG) != null) {
+                if (Utils.inventoryHas(player, Items.DRAGON_EGG) != null && ((ImmortalsData) player).isImmortal()) {
                     // Only increase if not already increased
                     if (attackAttr != null && attackAttr.getBaseValue() <= baseAttack) {
+                        MutableText message = Text.literal("Unlocked ");
+                        MutableText spellText = Text.literal("Dragon Ascent")
+                                .styled(style -> style.withHoverEvent(
+                                        new HoverEvent.ShowText(
+                                                Text.literal(SpellRegistry.DRAGON_ASCENT.getDescription())))
+                                        .withColor(0x800080)); // Purple color
+
+                        player.sendMessage(
+                                message.append(spellText)
+                                        .append(" and gained +1 attack damage! Hover to see details!"));
                         attackAttr.setBaseValue(baseAttack + 1.0);
                     }
                 } else {
                     // Only decrease if currently increased
                     if (attackAttr != null && attackAttr.getBaseValue() > baseAttack) {
                         attackAttr.setBaseValue(baseAttack);
+                    }
+                }
+
+                EntityAttributeInstance blockBreakAttr = player
+                        .getAttributeInstance(EntityAttributes.BLOCK_BREAK_SPEED);
+                double baseBreakAttr = 1.0; // Default base value
+                if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != null) {
+                    // Only increase if not already increased
+                    if (blockBreakAttr != null && blockBreakAttr.getBaseValue() <= baseBreakAttr) {
+                        if (((ImmortalsData) player).isImmortal()) {
+                            MutableText message = Text.literal("Unlocked ");
+                            MutableText spellText = Text.literal("Timeslow")
+                                    .styled(style -> style.withHoverEvent(
+                                            new HoverEvent.ShowText(
+                                                    Text.literal(SpellRegistry.TIMESLOW.getDescription())))
+                                            .withColor(0xFFD700)); // Gold color
+
+                            player.sendMessage(message.append(spellText)
+                                    .append(" and gained Haste 2 block break speed! Hover to see details!"));
+                        }
+                        blockBreakAttr.setBaseValue(baseBreakAttr + 2.0); // Adjust block break speed for Haste II
+                    }
+                } else {
+                    // Only decrease if currently increased
+                    if (blockBreakAttr != null && blockBreakAttr.getBaseValue() > baseBreakAttr) {
+                        blockBreakAttr.setBaseValue(baseBreakAttr);
                     }
                 }
 
@@ -199,39 +235,6 @@ public class Immortals {
             }
         });
 
-        // Initialize the scoreboard objectives for timeslow, immortal and dragon_ascent
-        // for client rendering (yeah i still dont know how to send actual packets)
-        ServerTickEvents.START_SERVER_TICK.register((MinecraftServer server) -> {
-            Scoreboard sb = server.getScoreboard();
-            if (sb.getNullableObjective("timeslow") == null) {
-                sb.addObjective(
-                        "timeslow",
-                        ScoreboardCriterion.DUMMY,
-                        (Text) Text.literal("t"),
-                        ScoreboardCriterion.RenderType.INTEGER,
-                        true,
-                        null);
-            }
-            if (sb.getNullableObjective("dragon_ascent") == null) {
-                sb.addObjective(
-                        "dragon_ascent",
-                        ScoreboardCriterion.DUMMY,
-                        (Text) Text.literal("d"),
-                        ScoreboardCriterion.RenderType.INTEGER,
-                        true,
-                        null);
-            }
-            if (sb.getNullableObjective("immortal") == null) {
-                sb.addObjective(
-                        "immortal",
-                        ScoreboardCriterion.DUMMY,
-                        (Text) Text.literal("i"),
-                        ScoreboardCriterion.RenderType.INTEGER,
-                        true,
-                        null);
-            }
-        });
-
         // Register corruption command
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             dispatcher.register(CommandManager.literal("corruption")
@@ -311,7 +314,7 @@ public class Immortals {
                     if (server != null) {
                         // Schedule the ban on the next server tick to avoid race conditions
                         server.execute(() -> {
-                            String playerName = victim.getNameForScoreboard();
+                            String playerName = victim.getName().getString();
                             String reason = "\"You have lost all your corruption levels!\"";
                             // Fix command syntax - may need to be adjusted based on your server type
                             String command = String.format("tempban %s 0 0 24 %s", playerName, reason);
@@ -402,12 +405,14 @@ public class Immortals {
                     // Play totem animation and particles
                     world.sendEntityStatus(player, (byte) 35); // Totem pop
                     // Render rune
-                    Utils.updateRune(player, "immortal", 1);
+                    NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload(
+                            "immortal", player.getX(), player.getY(), player.getZ(), 14.0f, 30);
+
+                    for (ServerPlayerEntity other : PlayerLookup.world((ServerWorld) player.getWorld())) {
+                        ServerPlayNetworking.send(other, payload);
+                    }
                     Utils.drawImmortalEvent(player.getPos(), world);
                     player.playSound(SoundEvents.ENTITY_WITHER_SPAWN, 1.0F, 1.0F);
-                    Main.scheduler.schedule(() -> {
-                        Utils.updateRune(player, "immortal", 0);
-                    }, 1500);
 
                     stack.decrement(1);
                     Utils.grant((ServerPlayerEntity) player, "an_immortal");

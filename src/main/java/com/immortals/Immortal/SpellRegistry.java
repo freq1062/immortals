@@ -7,6 +7,8 @@ import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.particle.DustParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.entity.LivingEntity;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.util.math.Vec3d;
@@ -18,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.immortals.Main;
 import com.immortals.Utils;
 import com.immortals.api.ImmortalsData;
+import com.immortals.network.NetworkChannels;
 
 import net.minecraft.item.Items;
 import net.minecraft.item.ItemStack;
@@ -36,7 +39,7 @@ public enum SpellRegistry {
                                     and 2 blocks vertically in the direction you're facing.
                                     Cooldown %d seconds.
                             """,
-                    Main.CONFIG.getInt("dashCooldown"))) {
+                    Main.CONFIG.getInt("dashCooldown") / 20)) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             Vec3d dir = user.getRotationVec(1.0F);
@@ -88,8 +91,8 @@ public enum SpellRegistry {
                                     of gold dust. Cooldown %d seconds.
                             """,
                     Main.CONFIG.getDouble("glowRadius"),
-                    Main.CONFIG.getInt("glowDuration"),
-                    Main.CONFIG.getInt("glowCooldown"))) {
+                    Main.CONFIG.getInt("glowDuration") / 20,
+                    Main.CONFIG.getInt("glowCooldown") / 20)) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             ServerWorld world = (ServerWorld) user.getWorld();
@@ -145,8 +148,8 @@ public enum SpellRegistry {
                                     given slowness 4 for %d seconds the freezing effect.
                                     %d s cooldown.
                             """,
-                    Main.CONFIG.getInt("frostbiteDuration"),
-                    Main.CONFIG.getInt("frostbiteCooldown"))) {
+                    Main.CONFIG.getInt("frostbiteDuration") / 20,
+                    Main.CONFIG.getInt("frostbiteCooldown") / 20)) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             ServerWorld world = (ServerWorld) user.getWorld();
@@ -189,9 +192,9 @@ public enum SpellRegistry {
                                     Mortals are unaffected. %d s cooldown.
                             """,
                     Main.CONFIG.getDouble("blackoutRadius"),
-                    Main.CONFIG.getInt("blackoutBlind"),
-                    Main.CONFIG.getInt("blackoutDuration"),
-                    Main.CONFIG.getInt("blackoutCooldown"))) {
+                    Main.CONFIG.getInt("blackoutBlind") / 20,
+                    Main.CONFIG.getInt("blackoutDuration") / 20,
+                    Main.CONFIG.getInt("blackoutCooldown") / 20)) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             ServerWorld world = (ServerWorld) user.getWorld();
@@ -245,8 +248,8 @@ public enum SpellRegistry {
                                     persist can also be manually activated. Grants Resistance II
                                     for %d s and 6 Absorption hearts. %d s cooldown.
                             """,
-                    Main.CONFIG.getInt("persistResistance"),
-                    Main.CONFIG.getInt("persistCooldown"))) {
+                    Main.CONFIG.getInt("persistResistance") / 20,
+                    Main.CONFIG.getInt("persistCooldown") / 20)) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             user.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE,
@@ -292,7 +295,7 @@ public enum SpellRegistry {
                                     without hitting them. Does not count blocked hits.
                             """,
                     Main.CONFIG.getInt("splinterBlowCombo"),
-                    Main.CONFIG.getDouble("splinterBlowDmg") / 100)) {
+                    Main.CONFIG.getDouble("splinterBlowDmg") * 100)) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             int required_combo = Main.CONFIG.getInt("splinterBlowCombo");
@@ -341,12 +344,13 @@ public enum SpellRegistry {
     FRAGMENT("fragment", Main.CONFIG.getInt("fragmentCooldown"),
             String.format(
                     """
-                                    When activated, your next 3 hits summon
-                                    fragments that deal %d hearts of true damage
-                                    each. Cooldown %d seconds.
+                                    When activated, 3 fragments are summoned
+                                    in the direction you face, each dealing
+                                    %.2f%% of the target's max health
+                                    on hit. Cooldown %d seconds.
                             """,
-                    Main.CONFIG.getInt("fragmentDmg"),
-                    Main.CONFIG.getInt("fragmentCooldown"))) {
+                    Main.CONFIG.getDouble("fragmentDmg") * 100,
+                    Main.CONFIG.getInt("fragmentCooldown") / 20)) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             ServerWorld world = (ServerWorld) user.getWorld();
@@ -359,13 +363,13 @@ public enum SpellRegistry {
                     double offsetZ = Math.random() * 0.1 - 0.05;
 
                     // Create an emerald item
-                    ItemStack emeraldStack = new ItemStack(Items.EMERALD);
+                    ItemStack itemType = new ItemStack(Items.NETHERITE_SWORD);
                     net.minecraft.entity.ItemEntity fragment = new net.minecraft.entity.ItemEntity(
                             world,
                             user.getX() + offsetX,
                             user.getEyeY() - 0.1 + offsetY,
                             user.getZ() + offsetZ,
-                            emeraldStack);
+                            itemType);
 
                     // If target is provided, point towards them, otherwise use player's look
                     // direction
@@ -383,8 +387,19 @@ public enum SpellRegistry {
                     // Set velocity towards target or direction player is looking
                     fragment.setVelocity(direction.multiply(1.5));
                     fragment.setNoGravity(true);
-                    // Prevent pickup for 1.5 seconds (30 ticks)
-                    fragment.setPickupDelay(30);
+
+                    world.playSound(null, user.getX(), user.getY(), user.getZ(),
+                            net.minecraft.sound.SoundEvents.ITEM_TRIDENT_THROW,
+                            net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+
+                    // Set rotation to match the direction vector
+                    float yaw = (float) Math.toDegrees(Math.atan2(-direction.x, direction.z));
+                    float pitch = (float) Math.toDegrees(Math.asin(-direction.y));
+                    fragment.setYaw(yaw);
+                    fragment.setPitch(pitch);
+
+                    // Prevent pickup entirely
+                    fragment.setPickupDelay(32767);
 
                     world.spawnEntity(fragment);
                     // Collision handled in Immortals.java
@@ -395,14 +410,104 @@ public enum SpellRegistry {
         }
     },
 
+    BEAM("beam", Main.CONFIG.getInt("beamCooldown"), String.format("""
+                    Fires a beam of dark energy in the direction you're facing,
+                    dealing %.2f%% of max health as damage to anything in its path
+                    and knocking them back. Cooldown %d seconds.
+            """, Main.CONFIG.getDouble("beamDmg") * 100, Main.CONFIG.getInt("beamCooldown") / 20)) {
+        @Override
+        public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
+            ServerWorld world = (ServerWorld) user.getWorld();
+            Vec3d eyePos = user.getEyePos();
+            Vec3d look = user.getRotationVec(1.0F).normalize();
+            double maxDistance = 32.0; // Beam length
+            float beamDmg = (float) Main.CONFIG.getDouble("beamDmg");
+            float beamPct = beamDmg; // already a fraction (e.g. 0.2 for 20%)
+            int beamTicks = 20; // 1 second
+
+            for (int tick = 0; tick < beamTicks; tick++) {
+                final int t = tick;
+                Main.scheduler.schedule(() -> {
+                    double spiralRadius = 0.4;
+                    double spiralTurns = 2.5; // how many full turns over the beam
+                    for (double d = 0; d < maxDistance; d += 0.25) {
+                        Vec3d pos = eyePos.add(look.multiply(d));
+
+                        // Spiral offset
+                        double spiralAngle = 2 * Math.PI * spiralTurns * (d / maxDistance) + t * 0.25;
+                        double offsetX = Math.cos(spiralAngle) * spiralRadius;
+                        double offsetY = Math.sin(spiralAngle) * spiralRadius;
+
+                        // Find a vector perpendicular to the beam direction for spiral
+                        Vec3d up = new Vec3d(0, 1, 0);
+                        Vec3d perp1 = look.crossProduct(up).normalize();
+                        if (perp1.lengthSquared() < 0.01) {
+                            // If look is vertical, use X axis
+                            perp1 = new Vec3d(1, 0, 0);
+                        }
+                        Vec3d perp2 = look.crossProduct(perp1).normalize();
+
+                        Vec3d spiralOffset = perp1.multiply(offsetX).add(perp2.multiply(offsetY));
+                        Vec3d spiralPos = pos.add(spiralOffset);
+
+                        // Main beam: purple dust
+                        DustParticleEffect beamParticle = new DustParticleEffect(0x8B0000, 1.2f); // dark red
+                        world.spawnParticles(beamParticle, spiralPos.x, spiralPos.y, spiralPos.z, 2, 0, 0, 0, 0.01);
+
+                        // Add a white core for extra "laser" effect
+                        DustParticleEffect coreParticle = new DustParticleEffect(0xFFFFFF, 0.7f);
+                        world.spawnParticles(coreParticle, pos.x, pos.y, pos.z, 1, 0, 0, 0, 0.01);
+
+                        // Occasional sparkles on the spiral
+                        if (t % 4 == 0 && Math.random() < 0.15) {
+                            world.spawnParticles(ParticleTypes.END_ROD, spiralPos.x, spiralPos.y, spiralPos.z, 1, 0, 0,
+                                    0, 0.01);
+                        }
+                    }
+                }, tick);
+            }
+
+            // Raycast and hit entities
+            Set<Entity> hitEntities = new HashSet<>();
+            for (double d = 0; d < maxDistance; d += 0.5) {
+                Vec3d pos = eyePos.add(look.multiply(d));
+                List<Entity> entities = world.getOtherEntities(user,
+                        user.getBoundingBox().expand(0.5).offset(pos.subtract(user.getPos())),
+                        e -> e instanceof LivingEntity && e != user && !hitEntities.contains(e));
+                for (Entity e : entities) {
+                    LivingEntity le = (LivingEntity) e;
+                    float dmg = le.getMaxHealth() * beamPct;
+                    le.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, user), dmg);
+
+                    // Knockback: 5 blocks horizontally away from user, plus a little up
+                    Vec3d away = le.getPos().subtract(user.getPos()).normalize();
+                    Vec3d knock = new Vec3d(away.x, 0.2, away.z).normalize().multiply(1.5);
+                    le.addVelocity(knock.x, knock.y, knock.z);
+
+                    hitEntities.add(le);
+                    // Only hit each entity once
+                }
+            }
+
+            // Sound and feedback
+            world.playSound(null, user.getX(), user.getY(), user.getZ(),
+                    net.minecraft.sound.SoundEvents.BLOCK_RESPAWN_ANCHOR_DEPLETE,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.5F);
+            world.playSound(null, user.getX(), user.getY(), user.getZ(),
+                    net.minecraft.sound.SoundEvents.ITEM_TOTEM_USE,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 0.75F, 0.5F);
+            user.sendMessage(Text.literal("§5You fire a beam of dark energy!"), true);
+        }
+    },
+
     DRAGON_ASCENT("dragon_ascent", Main.CONFIG.getInt("dragonAscentCooldown"), String.format("""
                     All hostile entities and untrusted players within a radius of %.2f blocks
                     are struck twice by lightning, dealing a total of %.2f%% of their max health.
                     The spell propels you into the air for %d seconds.
                     Requires a Dragon Egg in your inventory.
                     Cooldown %d seconds.
-            """, Main.CONFIG.getDouble("dragonAscentRadius"), Main.CONFIG.getDouble("dragonAscentTotalDmg") / 100,
-            Main.CONFIG.getInt("dragonAscentLevitation"), Main.CONFIG.getInt("dragonAscentCooldown"))) {
+            """, Main.CONFIG.getDouble("dragonAscentRadius"), Main.CONFIG.getDouble("dragonAscentTotalDmg") * 100,
+            Main.CONFIG.getInt("dragonAscentLevitation") / 20, Main.CONFIG.getInt("dragonAscentCooldown") / 20)) {
 
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
@@ -412,7 +517,14 @@ public enum SpellRegistry {
                 return;
             }
             Utils.grant(user, "dragon_ascent");
-            Utils.updateRune(user, "dragon_ascent", 1);
+
+            // Announce to nearby players and draw dragon ascent runes
+            NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload(
+                    "dragon_ascent", user.getX(), user.getY(), user.getZ(), 14.0f, 80);
+
+            for (ServerPlayerEntity player : PlayerLookup.world((ServerWorld) user.getWorld())) {
+                ServerPlayNetworking.send(player, payload);
+            }
 
             for (int i = 0; i < 100; i++) { // 5 seconds
                 Main.scheduler.schedule(() -> {
@@ -459,9 +571,6 @@ public enum SpellRegistry {
                                // 2s
                 }
             }
-            Main.scheduler.schedule(() -> {
-                Utils.updateRune(user, "dragon_ascent", 0);
-            }, 60); // 6 seconds
             user.sendMessage(Text.literal("§dThe dragon rune smites your enemies!"), true);
         }
 
@@ -471,8 +580,8 @@ public enum SpellRegistry {
                     Within a radius of %.2f blocks, all entities are slowed to 1/4 speed
                     and projectiles to 1/20 speed for a duration of %d seconds.
                     Cooldown %d seconds.
-            """, Main.CONFIG.getDouble("timeSlowRadius"), Main.CONFIG.getInt("timeSlowDuration"),
-            Main.CONFIG.getInt("timeSlowCooldown"))) {
+            """, Main.CONFIG.getDouble("timeSlowRadius"), Main.CONFIG.getInt("timeSlowDuration") / 20,
+            Main.CONFIG.getInt("timeSlowCooldown") / 20)) {
 
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
@@ -483,7 +592,12 @@ public enum SpellRegistry {
                 return;
             }
             Utils.grant(user, "timeslow");
-            Utils.updateRune(user, "timeslow", 1);
+            NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload(
+                    "timeslow", user.getX(), user.getY(), user.getZ(), 14.0f, Main.CONFIG.getInt("timeSlowDuration"));
+
+            for (ServerPlayerEntity player : PlayerLookup.world((ServerWorld) user.getWorld())) {
+                ServerPlayNetworking.send(player, payload);
+            }
 
             ServerWorld world = (ServerWorld) user.getWorld();
             Vec3d center = user.getPos();
@@ -591,7 +705,6 @@ public enum SpellRegistry {
                 world.playSound(null, user.getX(), user.getY(), user.getZ(),
                         net.minecraft.sound.SoundEvents.BLOCK_BEACON_DEACTIVATE,
                         net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 0.5F);
-                Utils.updateRune(user, "timeslow", 0);
                 for (Entity entity : slowedEntities) {
                     try {
                         Main.api.rateEntity(entity, 20);
@@ -635,7 +748,8 @@ public enum SpellRegistry {
     }
 
     public String getDescription() {
-        return description.replace("\n", " ");
+        // Replace newlines and collapse multiple spaces into a single space
+        return description.replace("\n", " ").replaceAll("\\s+", " ").trim();
     }
 
     /** The unique identifier players will use in `/bind ...` */

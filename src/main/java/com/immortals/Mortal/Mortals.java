@@ -3,6 +3,7 @@ package com.immortals.Mortal;
 import com.immortals.Utils;
 import com.immortals.api.ImmortalsData;
 import com.immortals.Main;
+import com.immortals.network.NetworkChannels;
 import com.immortals.Immortal.SpellRegistry;
 import com.immortals.ModItems;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -11,6 +12,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -23,6 +25,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.command.argument.EntityArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.AttributeModifierSlot;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -111,9 +114,6 @@ public class Mortals {
             }
         });
 
-        // Mortal xp scaling system had to be combined with the Immortal one, so it's in
-        // Immortals.java
-
         // Mortals' lifesteal
         ServerLivingEntityEvents.AFTER_DEATH.register((ent, src) -> {
             if (!ent.getWorld().isClient() && ent instanceof ServerPlayerEntity victim) {
@@ -128,7 +128,7 @@ public class Mortals {
                     if (mhVic.getBaseValue() <= 2.0) {
                         // banned ):
                         mhVic.setBaseValue(6.0); // Restart player at 3 hearts
-                        String playerName = victim.getNameForScoreboard();
+                        String playerName = victim.getName().getString();
                         String reason = "You have run out of hearts!";
                         String command = String.format("tempban %s 0 0 24 %s", playerName, reason);
                         MinecraftServer server = victim.getServer();
@@ -162,8 +162,8 @@ public class Mortals {
         });
 
         // Item use events
-        UseItemCallback.EVENT.register((player, world, hand) -> {
-            if (world.isClient()) {
+        UseItemCallback.EVENT.register((p, world, hand) -> {
+            if (world.isClient() || !(p instanceof ServerPlayerEntity player)) {
                 return ActionResult.PASS;
             }
             ItemStack stack = player.getStackInHand(hand);
@@ -247,6 +247,96 @@ public class Mortals {
                     player.sendMessage(Text.literal("§aTalisman activated!"), true);
                     return ActionResult.SUCCESS;
                 }
+            } else if (stack.getItem() == ModItems.AUGMENTATION_CORE) {
+                if (data.isImmortal()) {
+                    player.sendMessage(
+                            Text.literal(
+                                    "You scratched your head and couldn't figure out how to use the core."),
+                            false);
+                    return ActionResult.PASS;
+                }
+                ItemStack stackToAugment = player.getOffHandStack();
+                if (stackToAugment.isEmpty()) {
+                    player.sendMessage(Text.literal("Hold the item you would like to augment in your offhand!"), false);
+                    return ActionResult.PASS;
+                } else if (stackToAugment.getCount() != 1) {
+                    player.sendMessage(Text.literal("You can only augment an item stack of size 1."), false);
+                    return ActionResult.PASS;
+                } else if (Utils.hasAttribute(stackToAugment, "immortals:augmented")) {
+                    player.sendMessage(Text.literal("This item has already been augmented."), true);
+                    return ActionResult.PASS;
+                }
+
+                stack.decrement(1);
+
+                if (stackToAugment.getItem() == Items.TOTEM_OF_UNDYING) {
+                    // Turn totem into a talisman
+                    Utils.addModifier(
+                            stackToAugment,
+                            "immortals:augmented",
+                            AttributeModifierSlot.ANY,
+                            EntityAttributes.LUCK,
+                            1.0,
+                            EntityAttributeModifier.Operation.ADD_VALUE);
+                    // Add "Strength" and one random augment to the talisman
+                    java.util.List<String> augments = new java.util.ArrayList<>();
+                    augments.add("Strength");
+                    String[] possible = { "Speed", "Regeneration", "Fire Resistance" };
+                    String chosen = possible[new java.util.Random().nextInt(possible.length)];
+                    augments.add(chosen);
+
+                    // Create a new NBT tag with augment as a string list
+                    NbtCompound augmentTag = new NbtCompound();
+                    net.minecraft.nbt.NbtList augmentList = new net.minecraft.nbt.NbtList();
+                    for (String s : augments) {
+                        augmentList.add(net.minecraft.nbt.NbtString.of(s));
+                    }
+                    augmentTag.put("augment", augmentList);
+
+                    // Set it under the CUSTOM_DATA component
+                    stackToAugment.set(DataComponentTypes.CUSTOM_DATA,
+                            net.minecraft.component.type.NbtComponent.of(augmentTag));
+
+                    // Set custom name and lore
+                    int color;
+                    switch (chosen) {
+                        case "Speed" -> color = 0x3498DB; // blue
+                        case "Regeneration" -> color = 0xFF69B4; // pink
+                        case "Fire Resistance" -> color = 0xFFA500; // orange
+                        default -> color = 0x3498DB; // fallback to blue
+                    }
+                    String talismanName = "Talisman of " + chosen;
+                    stackToAugment.set(DataComponentTypes.CUSTOM_NAME,
+                            Text.literal(talismanName)
+                                    .styled(style -> style.withItalic(false)
+                                            .withColor(color)
+                                            .withBold(true)));
+
+                    java.util.List<Text> lore = java.util.List.of(
+                            Text.literal(
+                                    "Use to replenish Strength II and " + chosen + " for 1 minute 30 seconds.")
+                                    .styled(style -> style.withItalic(false).withColor(0xAAAAAA)));
+                    stackToAugment.set(DataComponentTypes.LORE, new net.minecraft.component.type.LoreComponent(lore));
+
+                    player.sendMessage(Text.literal("§aAugmented into a " + talismanName + "!"), false);
+                } else {
+                    // Augment as usual
+                    for (java.util.AbstractMap.SimpleEntry<RegistryEntry<EntityAttribute>, Float> entry : Augmentation
+                            .rollAttributes(stackToAugment.getItem())) {
+                        Utils.addModifier(
+                                stackToAugment,
+                                "immortals:augmented",
+                                AttributeModifierSlot.ANY,
+                                entry.getKey(),
+                                entry.getValue(),
+                                EntityAttributeModifier.Operation.ADD_VALUE);
+                    }
+                    player.sendMessage(Text.literal("§aAugmented!"), false);
+                }
+                Utils.augmentationAnimation(stackToAugment.copy(), stackToAugment.getItem(), player);
+                stackToAugment.decrement(1);
+                Utils.grant((ServerPlayerEntity) player, "augmenter");
+                return ActionResult.SUCCESS;
             }
 
             return ActionResult.PASS;
@@ -387,119 +477,57 @@ public class Mortals {
 
                                         return 1;
                                     }))));
-            dispatcher.register(CommandManager.literal("augment")
-                    .executes(ctx -> {
-                        ServerPlayerEntity player = ctx.getSource().getPlayer();
-                        ImmortalsData data = (ImmortalsData) player;
-
-                        if (data.isImmortal()) {
-                            player.sendMessage(
-                                    Text.literal(
-                                            "You scratched your head and couldn't figure out how to use the core."),
-                                    false);
-                            return 0;
-                        }
-
-                        ItemStack mainHand = player.getMainHandStack();
-
-                        // Search for augmentation core in inventory
-
-                        Integer slotWithCore = Utils.inventoryHas(player, ModItems.AUGMENTATION_CORE);
-
-                        if (slotWithCore == null) {
-                            player.sendMessage(Text.literal("You need an Augmentation Core to use this command."),
-                                    false);
-                            return 0;
-                        }
-
-                        if (mainHand.isEmpty()) {
-                            player.sendMessage(Text.literal("You must be holding an item to augment."), false);
-                            return 0;
-                        }
-
-                        if (mainHand.getCount() != 1) {
-                            player.sendMessage(Text.literal("You can only augment an item stack of size 1."), false);
-                            return 0;
-                        }
-
-                        if (Utils.hasAttribute(mainHand, "immortals:augmented")) {
-                            player.sendMessage(Text.literal("This item has already been augmented."), true);
-                            return 0; // Or early exit from the method
-                        }
-                        // Remove one augmentation core
-                        if (slotWithCore == player.getInventory().size()) {
-                            player.getOffHandStack().decrement(1);
-                        } else {
-                            player.getInventory().getStack(slotWithCore).decrement(1);
-                        }
-
-                        if (mainHand.getItem() == Items.TOTEM_OF_UNDYING) {
-                            // Turn totem into a talisman
-                            Utils.addModifier(
-                                    mainHand,
-                                    "immortals:augmented",
-                                    AttributeModifierSlot.ANY,
-                                    EntityAttributes.LUCK,
-                                    1.0,
-                                    EntityAttributeModifier.Operation.ADD_VALUE);
-                            // Add "Strength" and one random augment to the talisman
-                            java.util.List<String> augments = new java.util.ArrayList<>();
-                            augments.add("Strength");
-                            String[] possible = { "Speed", "Regeneration", "Fire Resistance" };
-                            String chosen = possible[new java.util.Random().nextInt(possible.length)];
-                            augments.add(chosen);
-
-                            // Create a new NBT tag with augment as a string list
-                            NbtCompound augmentTag = new NbtCompound();
-                            net.minecraft.nbt.NbtList augmentList = new net.minecraft.nbt.NbtList();
-                            for (String s : augments) {
-                                augmentList.add(net.minecraft.nbt.NbtString.of(s));
-                            }
-                            augmentTag.put("augment", augmentList);
-
-                            // Set it under the CUSTOM_DATA component
-                            mainHand.set(DataComponentTypes.CUSTOM_DATA,
-                                    net.minecraft.component.type.NbtComponent.of(augmentTag));
-
-                            // Set custom name and lore
-                            int color;
-                            switch (chosen) {
-                                case "Speed" -> color = 0x3498DB; // blue
-                                case "Regeneration" -> color = 0xFF69B4; // pink
-                                case "Fire Resistance" -> color = 0xFFA500; // orange
-                                default -> color = 0x3498DB; // fallback to blue
-                            }
-                            String talismanName = "Talisman of " + chosen;
-                            mainHand.set(DataComponentTypes.CUSTOM_NAME,
-                                    Text.literal(talismanName)
-                                            .styled(style -> style.withItalic(false)
-                                                    .withColor(color)
-                                                    .withBold(true)));
-
-                            java.util.List<Text> lore = java.util.List.of(
-                                    Text.literal(
-                                            "Use to replenish Strength II and " + chosen + " for 1 minute 30 seconds.")
-                                            .styled(style -> style.withItalic(false).withColor(0xAAAAAA)));
-                            mainHand.set(DataComponentTypes.LORE, new net.minecraft.component.type.LoreComponent(lore));
-
-                            player.sendMessage(Text.literal("§aAugmented into a " + talismanName + "!"), false);
-                        } else {
-                            // Augment as usual
-                            for (java.util.AbstractMap.SimpleEntry<RegistryEntry<EntityAttribute>, Float> entry : Augmentation
-                                    .rollAttributes(mainHand.getItem())) {
-                                Utils.addModifier(
-                                        mainHand,
-                                        "immortals:augmented",
-                                        AttributeModifierSlot.ANY,
-                                        entry.getKey(),
-                                        entry.getValue(),
-                                        EntityAttributeModifier.Operation.ADD_VALUE);
-                            }
-                            player.sendMessage(Text.literal("§aAugmented!"), false);
-                        }
-                        Utils.grant(player, "augmenter");
-                        return 1;
-                    }));
+        });
+        // Register 'render' command
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            dispatcher.register(CommandManager.literal("render")
+                    .then(CommandManager.literal("sphere")
+                            .then(CommandManager.argument("r", IntegerArgumentType.integer(0, 255))
+                                    .then(CommandManager.argument("g", IntegerArgumentType.integer(0, 255))
+                                            .then(CommandManager.argument("b", IntegerArgumentType.integer(0, 255))
+                                                    .then(CommandManager
+                                                            .argument("a", IntegerArgumentType.integer(0, 255))
+                                                            .then(CommandManager
+                                                                    .argument("size",
+                                                                            IntegerArgumentType.integer(1, 100))
+                                                                    .executes(ctx -> {
+                                                                        ServerPlayerEntity player = ctx.getSource()
+                                                                                .getPlayer();
+                                                                        float r = IntegerArgumentType.getInteger(ctx,
+                                                                                "r") / 255.0f;
+                                                                        float g = IntegerArgumentType.getInteger(ctx,
+                                                                                "g") / 255.0f;
+                                                                        float b = IntegerArgumentType.getInteger(ctx,
+                                                                                "b") / 255.0f;
+                                                                        float a = IntegerArgumentType.getInteger(ctx,
+                                                                                "a") / 255.0f;
+                                                                        float size = IntegerArgumentType.getInteger(ctx,
+                                                                                "size");
+                                                                        NetworkChannels.SphereS2CPayload payload = new NetworkChannels.SphereS2CPayload(
+                                                                                r, g, b, a,
+                                                                                (float) player.getX(),
+                                                                                (float) player.getY(),
+                                                                                (float) player.getZ(),
+                                                                                size, 500);
+                                                                        ServerPlayNetworking.send(player, payload);
+                                                                        player.sendMessage(
+                                                                                Text.literal("§aRendered sphere."),
+                                                                                false);
+                                                                        return 1;
+                                                                    })))))))
+                    .then(CommandManager.literal("rune")
+                            .then(CommandManager
+                                    .argument("id", StringArgumentType.string())
+                                    .executes(ctx -> {
+                                        ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                        String id = StringArgumentType.getString(ctx,
+                                                "id");
+                                        NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload(
+                                                id, player.getX(), player.getY(), player.getZ(), 100.0f, 500);
+                                        ServerPlayNetworking.send(player, payload);
+                                        player.sendMessage(Text.literal("§aRendered rune: " + id), false);
+                                        return 1;
+                                    }))));
         });
     }
 }

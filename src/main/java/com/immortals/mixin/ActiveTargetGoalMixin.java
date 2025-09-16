@@ -34,7 +34,7 @@ public abstract class ActiveTargetGoalMixin {
             if (!(this.targetEntity instanceof ServerPlayerEntity sp))
                 return;
 
-            // check whether player is immortal (adjust cast to your implementation)
+            // check whether player is immortal
             ImmortalsData data = (ImmortalsData) sp;
             if (!data.isImmortal())
                 return;

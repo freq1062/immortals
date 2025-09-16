@@ -7,7 +7,6 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageType;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -19,9 +18,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.particle.ParticleTypes;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ScoreboardDisplaySlot;
-import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.component.type.AttributeModifierSlot;
 import net.minecraft.component.type.AttributeModifiersComponent;
 import net.minecraft.advancement.AdvancementProgress;
@@ -81,7 +77,7 @@ public class Utils {
             case DASH, GLOW -> 1;
             case BLACKOUT, FROSTBITE -> 2;
             case PERSIST, SPLINTER_BLOW -> 3;
-            case FRAGMENT -> 5;
+            case FRAGMENT, BEAM -> 5;
             default -> 0;
         };
     }
@@ -126,7 +122,7 @@ public class Utils {
             { "frostbite", "blackout" },
             { "persist", "splinter_blow" },
             {},
-            { "fragment" }
+            { "fragment", "beam" }
     };
 
     public static Text getSpellDescriptions(int corr) {
@@ -154,7 +150,7 @@ public class Utils {
             MutableText spellText = Text.literal(spellName)
                     .styled(style -> style.withHoverEvent(
                             new HoverEvent.ShowText(Text.literal(spell.getDescription())))
-                            .withColor(0xFFAA00)); // Gold color
+                            .withColor(0xFF0000)); // Red color
 
             return message.append(spellText).append("! Hover to see details!");
 
@@ -218,6 +214,104 @@ public class Utils {
             }
         }
         return null;
+    }
+
+    public static void augmentationAnimation(ItemStack copy, Item item, ServerPlayerEntity player) {
+        if (!(player.getWorld() instanceof ServerWorld serverWorld))
+            return;
+
+        // Get the player's eye position (at eye level, not just where they're looking)
+        Vec3d eyePos = player.getEyePos();
+
+        // Calculate spawn positions to the left and right of the player at eye level
+        Vec3d look = player.getRotationVec(1.0f).normalize();
+        Vec3d left = look.crossProduct(new Vec3d(0, 1, 0)).normalize().multiply(0.7);
+        Vec3d right = left.multiply(-1);
+
+        Vec3d pos1 = eyePos.add(left);
+        Vec3d pos2 = eyePos.add(right);
+
+        // Spawn the two item entities
+        Entity itemEntity1 = net.minecraft.entity.EntityType.ITEM.create(
+                serverWorld,
+                null,
+                new BlockPos((int) pos1.x, (int) pos1.y, (int) pos1.z),
+                SpawnReason.TRIGGERED,
+                false,
+                false);
+        Entity itemEntity2 = net.minecraft.entity.EntityType.ITEM.create(
+                serverWorld,
+                null,
+                new BlockPos((int) pos2.x, (int) pos2.y, (int) pos2.z),
+                SpawnReason.TRIGGERED,
+                false,
+                false);
+
+        if (itemEntity1 == null || itemEntity2 == null)
+            return;
+
+        itemEntity1.setPosition(pos1);
+        itemEntity2.setPosition(pos2);
+
+        ((net.minecraft.entity.ItemEntity) itemEntity1).setStack(new ItemStack(item));
+        ((net.minecraft.entity.ItemEntity) itemEntity2)
+                .setStack(new ItemStack(com.immortals.ModItems.AUGMENTATION_CORE));
+
+        // Make the item entities ignore gravity
+        ((net.minecraft.entity.ItemEntity) itemEntity1).setNoGravity(true);
+        ((net.minecraft.entity.ItemEntity) itemEntity2).setNoGravity(true);
+
+        serverWorld.spawnEntity(itemEntity1);
+        serverWorld.spawnEntity(itemEntity2);
+
+        // Animate the items moving together over a longer duration (e.g., 40 steps)
+        final int steps = 100;
+        for (int i = 1; i <= steps; i++) {
+            final int step = i;
+            Main.scheduler.schedule(() -> {
+                double t = step / (double) steps;
+                Vec3d interp1 = pos1.lerp(eyePos, t);
+                Vec3d interp2 = pos2.lerp(eyePos, t);
+                serverWorld.getServer().execute(() -> {
+                    itemEntity1.setPosition(interp1);
+                    itemEntity2.setPosition(interp2);
+                    // Add some particles along the path for visual effect
+                    serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                            interp1.x, interp1.y, interp1.z, 2, 0.05, 0.05, 0.05, 0.01);
+                    serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                            interp2.x, interp2.y, interp2.z, 2, 0.05, 0.05, 0.05, 0.01);
+                });
+            }, step);
+        }
+
+        Main.scheduler.schedule(() -> {
+            // Remove the items and spawn a blue particle explosion at eye level
+            serverWorld.getServer().execute(() -> {
+                itemEntity1.discard();
+                itemEntity2.discard();
+                serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                        eyePos.x, eyePos.y, eyePos.z, 60, 0.4, 0.4, 0.4, 0.15);
+                serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.EXPLOSION,
+                        eyePos.x, eyePos.y, eyePos.z, 2, 0, 0, 0, 0.1);
+                serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.ENCHANT,
+                        eyePos.x, eyePos.y, eyePos.z, 30, 0.3, 0.3, 0.3, 0.2);
+            });
+            Entity summonedItem = net.minecraft.entity.EntityType.ITEM.create(
+                    serverWorld,
+                    null,
+                    new BlockPos((int) eyePos.x, (int) eyePos.y, (int) eyePos.z),
+                    SpawnReason.TRIGGERED,
+                    false,
+                    false);
+            if (summonedItem != null) {
+                summonedItem.setPosition(eyePos);
+                ((net.minecraft.entity.ItemEntity) summonedItem).setStack(copy);
+                serverWorld.spawnEntity(summonedItem);
+                // Add a burst of particles to highlight the new item
+                serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.HAPPY_VILLAGER,
+                        eyePos.x, eyePos.y, eyePos.z, 20, 0.2, 0.2, 0.2, 0.2);
+            }
+        }, steps + 20);
     }
 
     // Dragon ascent breath particles at pos
@@ -316,17 +410,6 @@ public class Utils {
             double pz = hz1 + (hz2 - hz1) * frac;
             world.spawnParticles(ParticleTypes.GLOW, px, hy, pz, 1, 0, 0, 0, 0f);
         }
-    }
-
-    // Displays rune scoreboard for 250ms to update runes client side
-    public static void updateRune(PlayerEntity player, String runeName, int value) {
-        Scoreboard sb = player.getWorld().getScoreboard();
-        ScoreboardObjective obj = sb.getNullableObjective(runeName);
-        sb.getOrCreateScore(player, obj).setScore(value);
-        sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, obj);
-        Main.scheduler.schedule(() -> {
-            sb.setObjectiveSlot(ScoreboardDisplaySlot.LIST, null);
-        }, 250);
     }
 
     // Add an attribute modifier to an ItemStack
