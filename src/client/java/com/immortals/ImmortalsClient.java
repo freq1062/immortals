@@ -1,26 +1,25 @@
 package com.immortals;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.item.Item;
 import net.minecraft.util.math.Vec3d;
 
-import org.joml.Matrix4f;
-
+import com.immortals.entity.ImmortalEntity;
+import com.immortals.entity.FragmentEntityRenderer;
 import com.immortals.network.NetworkChannels;
 
 import java.util.Map;
-import net.minecraft.util.math.RotationAxis;
+
+import org.lwjgl.glfw.GLFW;
 
 public class ImmortalsClient implements ClientModInitializer {
     private Map<String, Identifier> spellTextures = Map.of(
@@ -30,6 +29,14 @@ public class ImmortalsClient implements ClientModInitializer {
             "immortal", Identifier.of("immortals",
                     "textures/quads/immortal.png"));
 
+    /**
+     * Key binding for activating a spell. Defaults to the "B" key.
+     * If left blank, the spell can be activated using Shift + Right-Click.
+     */
+    private static final KeyBinding SPELL_KEY = KeyBindingHelper.registerKeyBinding(
+            new KeyBinding("key.immortals.cast_spell", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_B, "category.immortals"));
+
+    // BlockPos only accepts ints, but Vec3d accepts doubles for positions
     private static record RuneData(Identifier texture, double x, double y, double z, float size, int lifetimeTicks,
             int ticksElapsed) {
     }
@@ -38,10 +45,19 @@ public class ImmortalsClient implements ClientModInitializer {
             int ticksElapsed) {
     }
 
-    private static final java.util.List<Object> pendingObjects = new java.util.ArrayList<>();
+    // Use Vec3d for double-precision positions
+    private static record ItemData(Vec3d pos1, Vec3d pos2, Item item, float size, int lifetimeTicks, int ticksElapsed) {
+    }
+
+    public static final java.util.List<Object> pendingObjects = new java.util.ArrayList<>();
 
     @Override
     public void onInitializeClient() {
+        // Register fragment entity renderer
+        // EntityRendererRegistry.register(Entity.FRAGMENT_ENTITY, (ctx) -> new
+        // FragmentEntityRenderer(ctx));
+        EntityRendererRegistry.register(ImmortalEntity.FRAGMENT_ENTITY, FragmentEntityRenderer::new);
+
         ClientPlayNetworking.registerGlobalReceiver(NetworkChannels.RuneS2CPayload.ID, (payload, context) -> {
             ClientWorld world = context.client().world;
 
@@ -68,6 +84,21 @@ public class ImmortalsClient implements ClientModInitializer {
                     payload.maxSize(), payload.lifetimeTicks(), 0));
         });
 
+        ClientPlayNetworking.registerGlobalReceiver(NetworkChannels.ItemS2CPayload.ID, (payload, context) -> {
+            ClientWorld world = context.client().world;
+
+            if (world == null) {
+                return;
+            }
+
+            pendingObjects.add(new ItemData(
+                    new Vec3d(payload.x1(), payload.y1(), payload.z1()),
+                    new Vec3d(payload.x2(), payload.y2(), payload.z2()),
+                    Item.byRawId(payload.rawItemId()),
+                    payload.size(),
+                    payload.lifetimeTicks(), 0));
+        });
+
         // Render pending objects every frame
         WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             if (pendingObjects.isEmpty())
@@ -80,45 +111,61 @@ public class ImmortalsClient implements ClientModInitializer {
                     // Calculate display size based on lifetime
                     float displaySize = rune.size();
                     int totalLifetime = rune.lifetimeTicks();
-                    int elapsedLifetime = rune.size() > 0 ? totalLifetime - rune.ticksElapsed() : 0;
 
-                    // Animate size: grow in first 10%, shrink in last 10% of lifetime
-                    float progress = elapsedLifetime / (float) totalLifetime;
-                    if (progress < 0.1f) {
-                        displaySize = rune.size() * (progress / 0.1f); // Grow from 0 to full size
-                    } else if (progress > 0.9f) {
-                        displaySize = rune.size() * ((1.0f - progress) / 0.1f); // Shrink from full size to 0
+                    // Calculate smooth progress using current time for frame interpolation
+                    float tickDuration = 50.0f; // Milliseconds per tick (20 ticks per second)
+                    float tickProgress = (System.currentTimeMillis() % tickDuration) / tickDuration;
+                    float smoothElapsed = rune.ticksElapsed() + tickProgress;
+                    float smoothProgress = smoothElapsed / (float) totalLifetime;
+
+                    // Animate size: grow in first 15%, shrink in last 10% of lifetime
+                    if (smoothProgress < 0.15f) {
+                        displaySize = rune.size() * (smoothProgress / 0.15f); // Grow from 0 to full size
+                    } else if (smoothProgress > 0.9f) {
+                        displaySize = rune.size() * ((1.0f - smoothProgress) / 0.1f); // Shrink from full size to 0
                     }
 
-                    renderRune(context, rune.texture(), rune.x(), rune.y(), rune.z(), displaySize);
+                    ClientUtils.renderRune(context, rune.texture(), rune.x(), rune.y(), rune.z(), displaySize);
                 } else if (o instanceof SphereData sphere) {
-                    ClientWorld world = context.world();
-                    Camera camera = context.camera();
-                    Vec3d camPos = camera.getPos();
-                    MatrixStack matrices = context.matrixStack();
-                    VertexConsumerProvider consumers = context.consumers();
-                    if (world == null || consumers == null)
-                        return;
+                    System.out.println("Rendering sphere at (" + sphere.x() + ", " + sphere.y() + ", " + sphere.z()
+                            + ") with size " + sphere.size());
+                    ClientUtils.renderSphere(context, sphere.x(), sphere.y(), sphere.z(), sphere.color(),
+                            sphere.size());
+                } else if (o instanceof ItemData itemData) {
+                    // Calculate progress along the line based on elapsed time
+                    float tickDuration = 50.0f; // ms per tick
+                    float tickProgress = (System.currentTimeMillis() % (long) tickDuration) / tickDuration;
+                    float smoothElapsed = itemData.ticksElapsed() + tickProgress;
+                    float totalLifetime = itemData.lifetimeTicks();
+                    float t = Math.min(smoothElapsed / totalLifetime, 1.0f);
 
-                    float camX = (float) camPos.x, camY = (float) camPos.y, camZ = (float) camPos.z;
+                    Vec3d start = itemData.pos1();
+                    Vec3d end = itemData.pos2();
+                    double x = start.x + (end.x - start.x) * t;
+                    double y = start.y + (end.y - start.y) * t;
+                    double z = start.z + (end.z - start.z) * t;
 
-                    matrices.push();
-                    matrices.translate((float) (sphere.x - camX), (float) (sphere.y - camY), (float) (sphere.z - camZ));
-                    long time = System.currentTimeMillis();
-                    float rotation = (float) ((time / 20.0) % 360.0);
-                    matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotation));
-                    renderSphere(context.matrixStack(),
-                            context.consumers()
-                                    .getBuffer(RenderLayer.getEntityTranslucent(
-                                            Identifier.of("immortals", "textures/quads/white.png"))),
-                            sphere.color(), sphere.size());
-                    matrices.pop();
+                    ClientUtils.renderItem(context, itemData.item(), x, y, z, end.x, end.y, end.z,
+                            itemData.size());
                 }
             }
         });
 
         // Decrement lifetimes every tick and remove expired objects
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+
+            if (!SPELL_KEY.isPressed() && SPELL_KEY.wasPressed()) {
+                // Send a packet to the server when the key is released
+                int selectedSlot = client.player.getInventory().getSelectedSlot();
+                NetworkChannels.SpellC2SPayload payload = new NetworkChannels.SpellC2SPayload(selectedSlot);
+                ClientPlayNetworking.send(payload);
+            }
+
+            if (!client.options.attackKey.isPressed() && client.options.attackKey.wasPressed()) {
+                NetworkChannels.FragmentC2SPayload payload = new NetworkChannels.FragmentC2SPayload(0);
+                ClientPlayNetworking.send(payload);
+            }
+
             if (pendingObjects.isEmpty())
                 return;
 
@@ -136,139 +183,23 @@ public class ImmortalsClient implements ClientModInitializer {
                 } else if (o instanceof SphereData sphere) {
                     int newTicksElapsed = sphere.ticksElapsed() + 1;
                     if (sphere.lifetimeTicks() - newTicksElapsed <= 0) {
+                        System.out.println("Removing sphere at (" + sphere.x() + ", " + sphere.y() + ", " + sphere.z()
+                                + ")");
                         pendingObjects.remove(i);
                     } else {
                         pendingObjects.set(i, new SphereData(sphere.color(), sphere.x(), sphere.y(), sphere.z(),
                                 sphere.size(), sphere.lifetimeTicks(), newTicksElapsed));
                     }
+                } else if (o instanceof ItemData item) {
+                    int newTicksElapsed = item.ticksElapsed() + 1;
+                    if (item.lifetimeTicks() - newTicksElapsed <= 0) {
+                        pendingObjects.remove(i);
+                    } else {
+                        pendingObjects.set(i, new ItemData(item.pos1(), item.pos2(), item.item(), item.size(),
+                                item.lifetimeTicks(), newTicksElapsed));
+                    }
                 }
             }
         });
-    }
-
-    private void renderRune(WorldRenderContext context, Identifier texture, double px, double py, double pz,
-            float size) {
-        ClientWorld world = context.world();
-        Camera camera = context.camera();
-        Vec3d camPos = camera.getPos();
-        MatrixStack matrices = context.matrixStack();
-        VertexConsumerProvider consumers = context.consumers();
-        if (world == null || consumers == null)
-            return;
-
-        float camX = (float) camPos.x, camY = (float) camPos.y, camZ = (float) camPos.z;
-
-        matrices.push();
-        matrices.translate((float) (px - camX), (float) (py - camY) + 0.1f, (float) (pz - camZ));
-        long time = System.currentTimeMillis();
-        float rotation = (float) ((time / 20.0) % 360.0);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotation));
-        // Modern rendering approach for 1.21.8
-        VertexConsumer vc = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(texture));
-
-        // Set up shader parameters directly with render layer
-        // RenderSystem calls are largely deprecated in newer versions
-
-        // Use the current animated size
-        renderQuad(matrices, vc, size);
-        matrices.pop();
-    }
-
-    // Renders a quad(flat square) of the given size centered at the origin
-    private void renderQuad(MatrixStack matrices, VertexConsumer vc, float size) {
-        MatrixStack.Entry entry = matrices.peek();
-        Matrix4f modelMat = entry.getPositionMatrix();
-
-        float halfSize = size / 2; // Use the current animation size
-
-        // Bottom-left
-        vc.vertex(modelMat, -halfSize, 0, -halfSize).color(255, 255, 255, 255).texture(0, 1)
-                .overlay(OverlayTexture.DEFAULT_UV).light(240, 240).normal(entry, 0.0f, 1.0f, 0.0f);
-        // Bottom-right
-        vc.vertex(modelMat, halfSize, 0, -halfSize).color(255, 255, 255, 255).texture(1, 1)
-                .overlay(OverlayTexture.DEFAULT_UV).light(240, 240).normal(entry, 0.0f, 1.0f, 0.0f);
-        // Top-right
-        vc.vertex(modelMat, halfSize, 0, halfSize).color(255, 255, 255, 255).texture(1, 0)
-                .overlay(OverlayTexture.DEFAULT_UV).light(240, 240).normal(entry, 0.0f, 1.0f, 0.0f);
-        // Top-left
-        vc.vertex(modelMat, -halfSize, 0, halfSize).color(255, 255, 255, 255).texture(0, 0)
-                .overlay(OverlayTexture.DEFAULT_UV).light(240, 240).normal(entry, 0.0f, 1.0f, 0.0f);
-    }
-
-    // Renders a sphere of the given size centered at the origin
-    private void renderSphere(MatrixStack matrices, VertexConsumer vc, float[] color, float size) {
-        MatrixStack.Entry entry = matrices.peek();
-        Matrix4f modelMat = entry.getPositionMatrix();
-
-        // Increase these for a smoother sphere (more costly)
-        final int latitudeBands = 24;
-        final int longitudeBands = 24;
-        final float radius = size / 2f;
-
-        float r = color[0];
-        float g = color[1];
-        float b = color[2];
-        float a = color.length > 3 ? color[3] : 1.0f;
-
-        for (int lat = 0; lat < latitudeBands; lat++) {
-            float theta1 = (float) (lat * Math.PI / latitudeBands);
-            float theta2 = (float) ((lat + 1) * Math.PI / latitudeBands);
-
-            for (int lon = 0; lon < longitudeBands; lon++) {
-                float phi1 = (float) (lon * 2.0 * Math.PI / longitudeBands);
-                float phi2 = (float) ((lon + 1) * 2.0 * Math.PI / longitudeBands);
-
-                // Four vertices of the quad
-                float x1 = (float) (radius * Math.sin(theta1) * Math.cos(phi1));
-                float y1 = (float) (radius * Math.cos(theta1));
-                float z1 = (float) (radius * Math.sin(theta1) * Math.sin(phi1));
-
-                float x2 = (float) (radius * Math.sin(theta1) * Math.cos(phi2));
-                float y2 = (float) (radius * Math.cos(theta1));
-                float z2 = (float) (radius * Math.sin(theta1) * Math.sin(phi2));
-
-                float x3 = (float) (radius * Math.sin(theta2) * Math.cos(phi2));
-                float y3 = (float) (radius * Math.cos(theta2));
-                float z3 = (float) (radius * Math.sin(theta2) * Math.sin(phi2));
-
-                float x4 = (float) (radius * Math.sin(theta2) * Math.cos(phi1));
-                float y4 = (float) (radius * Math.cos(theta2));
-                float z4 = (float) (radius * Math.sin(theta2) * Math.sin(phi1));
-
-                // Normals (normalized vertex positions)
-                float nx1 = x1 / radius, ny1 = y1 / radius, nz1 = z1 / radius;
-                float nx2 = x2 / radius, ny2 = y2 / radius, nz2 = z2 / radius;
-                float nx3 = x3 / radius, ny3 = y3 / radius, nz3 = z3 / radius;
-                float nx4 = x4 / radius, ny4 = y4 / radius, nz4 = z4 / radius;
-
-                // UV coordinates
-                float u1 = (float) lon / longitudeBands;
-                float v1 = (float) lat / latitudeBands;
-                float u2 = (float) (lon + 1) / longitudeBands;
-                float v2 = v1;
-                float u3 = u2;
-                float v3 = (float) (lat + 1) / latitudeBands;
-                float u4 = u1;
-                float v4 = v3;
-
-                int light = 0x00F000F0; // Fullbright
-
-                // First triangle (v1, v2, v3) - properly ordered counterclockwise
-                vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
-                        .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(entry, nx1, ny1, nz1);
-                vc.vertex(modelMat, x2, y2, z2).color(r, g, b, a).texture(u2, v2)
-                        .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(entry, nx2, ny2, nz2);
-                vc.vertex(modelMat, x3, y3, z3).color(r, g, b, a).texture(u3, v3)
-                        .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(entry, nx3, ny3, nz3);
-
-                // Second triangle (v1, v4, v3) - adjusted for counterclockwise winding
-                vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
-                        .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(entry, nx1, ny1, nz1);
-                vc.vertex(modelMat, x4, y4, z4).color(r, g, b, a).texture(u4, v4)
-                        .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(entry, nx4, ny4, nz4);
-                vc.vertex(modelMat, x3, y3, z3).color(r, g, b, a).texture(u3, v3)
-                        .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(entry, nx3, ny3, nz3);
-            }
-        }
     }
 }

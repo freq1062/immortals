@@ -2,6 +2,8 @@ package com.immortals.Immortal;
 
 import com.immortals.Utils;
 import com.immortals.api.ImmortalsData;
+import com.immortals.entity.FragmentEntity;
+import com.immortals.entity.ImmortalEntity;
 import com.immortals.network.NetworkChannels;
 import com.immortals.ModItems;
 import com.immortals.Main;
@@ -20,9 +22,11 @@ import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.particle.ItemStackParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -32,14 +36,76 @@ import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 /*Implements the Immortals' corruption system.*/
 public class Immortals {
 
+    // Fragment related data structures
     public static final java.util.Map<ServerPlayerEntity, Entity> fragments = new java.util.HashMap<>();
+    public static final java.util.Map<UUID, Integer> fragmentCount = new java.util.HashMap<>();
+    // Link related data structures
+    public static final java.util.Map<ServerPlayerEntity, ServerPlayerEntity> parent = new java.util.concurrent.ConcurrentHashMap<>();
+    public static final java.util.Map<ServerPlayerEntity, Integer> size = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static void register() {
+
+        // Register spell activation
+        ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.SpellC2SPayload.ID, (payload, context) -> {
+            if (!(context.player() instanceof ServerPlayerEntity))
+                return;
+            SpellRegistry.tryActivate(context.player(), null, payload.slot());
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.FragmentC2SPayload.ID, (payload, context) -> {
+            if (!(context.player() instanceof ServerPlayerEntity user))
+                return;
+            if (fragmentCount.getOrDefault(user.getUuid(), 0) >= 3) {
+                SpellRegistry.recordUse(user, SpellRegistry.FRAGMENT);
+                return;
+            }
+            Vec3d playerPos = user.getPos();
+            Vec3d lookVec = user.getRotationVec(1.0F).normalize();
+            ServerWorld world = user.getWorld();
+
+            FragmentEntity fragment = new FragmentEntity(ImmortalEntity.FRAGMENT_ENTITY, world);
+            fragment.setPosition(playerPos.x, playerPos.y + user.getStandingEyeHeight() * 0.5,
+                    playerPos.z);
+            // Set yaw and pitch to match player's look direction
+            fragment.setYaw(user.getYaw());
+            fragment.setPitch(user.getPitch());
+            // Use player's look direction directly for velocity
+            fragment.setVelocity(lookVec.x * 1.5, lookVec.y * 1.5, lookVec.z * 1.5);
+            fragment.setCustomNameVisible(true); // Make the ID visible
+            fragment.setNoGravity(true); // Set no gravity
+            world.spawnEntity(fragment);
+            Immortals.fragments.put(user, fragment);
+            // Play sound for fragment throw
+            world.playSound(null, user.getX(), user.getY(), user.getZ(),
+                    net.minecraft.sound.SoundEvents.ITEM_TRIDENT_THROW,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+
+            // Spawn glass breaking particles in front of the user
+            Vec3d particlePos = user.getEyePos().add(user.getRotationVec(1.0F).multiply(2.0));
+            for (int j = 0; j < 15; j++) {
+                // Add some random spread to the particles
+                double offsetX = (Math.random() - 0.5) * 0.5;
+                double offsetY = (Math.random() - 0.5) * 0.5;
+                double offsetZ = (Math.random() - 0.5) * 0.5;
+                world.spawnParticles(
+                        new ItemStackParticleEffect(ParticleTypes.ITEM, new ItemStack(Items.GLASS)),
+                        particlePos.x, particlePos.y, particlePos.z,
+                        1, offsetX, offsetY, offsetZ,
+                        0.1);
+            }
+            fragmentCount.put(user.getUuid(), fragmentCount.getOrDefault(user.getUuid(), 0) + 1);
+            int remainingFragments = 3 - fragmentCount.getOrDefault(user.getUuid(), 0);
+            user.sendMessage(Text.literal("§d" + remainingFragments + " fragments remaining!"), true);
+        });
+
         // Passive abilities and spell activation
         ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
             // Fragment spell collision
@@ -65,17 +131,14 @@ public class Immortals {
                                 fragment.remove(Entity.RemovalReason.DISCARDED);
                             }
                         });
-
-                // Check for block collisions
-                if (fragment.horizontalCollision || fragment.verticalCollision) {
-                    fragment.remove(Entity.RemovalReason.DISCARDED);
-                }
-
-                // Remove fragment after 5 seconds
-                if (fragment.age > 100) {
-                    fragment.remove(Entity.RemovalReason.DISCARDED);
-                }
             }
+
+            // Ensure fragments are removed if their owner disconnects
+            server.getPlayerManager().getPlayerList().forEach(player -> {
+                if (!fragments.containsKey(player)) {
+                    fragments.entrySet().removeIf(entry -> entry.getKey().getUuid().equals(player.getUuid()));
+                }
+            });
 
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 
@@ -95,10 +158,16 @@ public class Immortals {
 
                 // Grant +1 attack damage if player has Dragon Egg and is immortal
                 EntityAttributeInstance attackAttr = player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE);
-                double baseAttack = 1.0; // Default base value
+
+                if (attackAttr.getBaseValue() > 2.0) {
+                    attackAttr.setBaseValue(1.0);
+                    System.out.println("Attack damage: " + attackAttr.getValue());
+                }
+
+                double baseAttack = player.getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE); // Default base value
                 if (Utils.inventoryHas(player, Items.DRAGON_EGG) != null && ((ImmortalsData) player).isImmortal()) {
                     // Only increase if not already increased
-                    if (attackAttr != null && attackAttr.getBaseValue() <= baseAttack) {
+                    if (attackAttr != null && attackAttr.getValue() <= baseAttack) {
                         MutableText message = Text.literal("Unlocked ");
                         MutableText spellText = Text.literal("Dragon Ascent")
                                 .styled(style -> style.withHoverEvent(
@@ -109,11 +178,11 @@ public class Immortals {
                         player.sendMessage(
                                 message.append(spellText)
                                         .append(" and gained +1 attack damage! Hover to see details!"));
-                        attackAttr.setBaseValue(baseAttack + 1.0);
+                        attackAttr.setBaseValue(2.0);
                     }
                 } else {
                     // Only decrease if currently increased
-                    if (attackAttr != null && attackAttr.getBaseValue() > baseAttack) {
+                    if (attackAttr != null && attackAttr.getValue() > baseAttack) {
                         attackAttr.setBaseValue(baseAttack);
                     }
                 }
@@ -123,7 +192,7 @@ public class Immortals {
                 double baseBreakAttr = 1.0; // Default base value
                 if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != null) {
                     // Only increase if not already increased
-                    if (blockBreakAttr != null && blockBreakAttr.getBaseValue() <= baseBreakAttr) {
+                    if (blockBreakAttr != null && blockBreakAttr.getValue() <= baseBreakAttr) {
                         if (((ImmortalsData) player).isImmortal()) {
                             MutableText message = Text.literal("Unlocked ");
                             MutableText spellText = Text.literal("Timeslow")
@@ -139,7 +208,7 @@ public class Immortals {
                     }
                 } else {
                     // Only decrease if currently increased
-                    if (blockBreakAttr != null && blockBreakAttr.getBaseValue() > baseBreakAttr) {
+                    if (blockBreakAttr != null && blockBreakAttr.getValue() > baseBreakAttr) {
                         blockBreakAttr.setBaseValue(baseBreakAttr);
                     }
                 }
@@ -176,8 +245,13 @@ public class Immortals {
                     || !(victim instanceof ServerPlayerEntity tp))
                 return ActionResult.PASS;
 
+            // Check if the item is on cooldown(ex. locked by lock)
+            if (sp.getItemCooldownManager().isCoolingDown(sp.getMainHandStack())) {
+                return ActionResult.FAIL;
+            }
+
             // Check if attacker is an ascended player and it was a full swing
-            if (world.isClient || !((ImmortalsData) sp).isImmortal()
+            if (!(world instanceof ServerWorld serverWorld) || !((ImmortalsData) sp).isImmortal()
                     || sp.getAttackCooldownProgress(0.5F) < 0.84F)
                 return ActionResult.PASS;
 
@@ -192,6 +266,7 @@ public class Immortals {
             if (onHitSpell != "") {
                 switch (onHitSpell) {
                     case "frostbite" -> SpellRegistry.FROSTBITE.activate(sp, tp);
+                    case "lock" -> SpellRegistry.LOCK.activate(sp, tp);
                     default -> {
                         // Invalid spell, do nothing
                         return ActionResult.PASS;
@@ -468,6 +543,27 @@ public class Immortals {
                     player.sendMessage(Text.literal("Your soul has reached its peak."), true);
                     return ActionResult.FAIL;
                 }
+            }
+
+            // Soul Purifier: Update corruption level +1 up to 0
+            if (stack.getItem() == ModItems.SOUL_PURIFIER) {
+                if (playerData.getCorruption() < 0) {
+                    playerData.addCorruption(1);
+                    ;
+                    int newLvl = playerData.getCorruption();
+                    int next = Utils.nextShardCost(newLvl);
+                    if (newLvl == 0) {
+                        // Reset health to 10 hearts
+                        player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0);
+                    }
+                    stack.decrement(1);
+                    player.sendMessage(
+                            Text.literal("§5You feel renewed. Corruption: §l" + newLvl + "§r. Next: " + next),
+                            true);
+                    return ActionResult.SUCCESS;
+                }
+                player.sendMessage(Text.literal("Soul purifier cannot increase corruption beyond +0."), true);
+                return ActionResult.FAIL;
             }
 
             if (player.isSneaking()) {

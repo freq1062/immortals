@@ -3,10 +3,12 @@ package com.immortals.Mortal;
 import com.immortals.Main;
 import com.immortals.Utils;
 import com.immortals.api.ImmortalsData;
+import com.immortals.network.NetworkChannels;
 import com.immortals.api.EquipmentVisibility;
 import com.immortals.ModItems;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -41,6 +43,24 @@ public class Weapons {
     private static final long BLINK_COOLDOWN_MS = Main.CONFIG.getInt("blinkCooldown");
 
     public static void register() {
+
+        // Register ability activation
+        ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.SpellC2SPayload.ID, (payload, context) -> {
+            if (!(context.player() instanceof ServerPlayerEntity sp))
+                return;
+            ItemStack inHand = sp.getStackInHand(sp.getActiveHand());
+            switch (inHand) {
+                case ItemStack stack when stack.getItem() == ModItems.PHASEBREAKER -> {
+                    phaseChange(sp, sp.getWorld());
+                }
+                case ItemStack stack when stack.getItem() == ModItems.CHRONOREAVER -> {
+                    overclock(sp, sp.getWorld());
+                }
+                default -> {
+                }
+            }
+        });
+
         // Handle special item usage
         UseItemCallback.EVENT.register((sp, world, hand) -> {
             if (!(sp instanceof ServerPlayerEntity) || ((ImmortalsData) sp).isImmortal())
@@ -67,99 +87,9 @@ public class Weapons {
                 player.sendMessage(Text.literal("§aYou have constructed the NUL-02 Chronoreaver!"), true);
                 return ActionResult.SUCCESS;
             } else if (inHand.getItem() == ModItems.PHASEBREAKER && player.isSneaking()) {
-                UUID id = player.getUuid();
-                long now = System.currentTimeMillis();
-                Long last = PHASE_CHANGE_COOLDOWNS.get(id);
-                if (last != null && now - last < PHASE_CHANGE_COOLDOWN_MS) {
-                    return ActionResult.FAIL;
-                }
-
-                // Compute teleport target
-                Vec3d eye = player.getCameraPosVec(1.0f);
-                Vec3d look = player.getRotationVec(1.0f).normalize();
-                Vec3d far = eye.add(look.multiply(15.0));
-
-                // Raycast (stop at first block hit)
-                BlockHitResult hit = world.raycast(new RaycastContext(
-                        eye, far,
-                        RaycastContext.ShapeType.COLLIDER,
-                        RaycastContext.FluidHandling.NONE,
-                        player));
-
-                Vec3d target = hit.getType() == HitResult.Type.BLOCK
-                        // Back off one step so we don’t end up inside a block
-                        ? hit.getPos().subtract(look.multiply(1.0))
-                        : far;
-
-                DustParticleEffect purple = new DustParticleEffect(0xDE7AFA, 3f);
-                int steps = 20;
-                for (int i = 0; i <= steps; i++) {
-                    double t = i / (double) steps;
-                    Vec3d point = eye.lerp(target, t);
-                    if (world instanceof ServerWorld sw) {
-                        sw.spawnParticles(purple,
-                                point.x, point.y, point.z,
-                                1, 0, 0, 0, 0);
-                    }
-                }
-
-                // Teleport on server
-                // Make an empty flag set so you can teleport to the air
-                Set<PositionFlag> flags = EnumSet.noneOf(PositionFlag.class);
-                sp.teleport(
-                        (ServerWorld) world,
-                        target.x, target.y, target.z,
-                        flags,
-                        player.getYaw(), player.getPitch(),
-                        false // Don't reset camera
-                );
-                world.playSound(null, player.getX(), player.getY(), player.getZ(),
-                        net.minecraft.sound.SoundEvents.ENTITY_ENDER_EYE_DEATH,
-                        net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-                world.playSound(null, player.getX(), player.getY(), player.getZ(),
-                        net.minecraft.sound.SoundEvents.ENTITY_ENDERMAN_TELEPORT,
-                        net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-
-                // Record cooldown
-                PHASE_CHANGE_COOLDOWNS.put(id, now);
-                player.sendMessage(Text.literal("§aPhase Changed!"), true);
-                player.playSound(SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
-
-                return ActionResult.SUCCESS;
+                return phaseChange(player, (ServerWorld) world) ? ActionResult.SUCCESS : ActionResult.FAIL;
             } else if (inHand.getItem() == ModItems.CHRONOREAVER && player.isSneaking()) {
-                UUID id = player.getUuid();
-                long now = System.currentTimeMillis();
-                Long last = OVERCLOCK_COOLDOWNS.get(id);
-                long cooldown = 45000; // 45 seconds in ms
-                if (last != null && now - last < cooldown) {
-                    return ActionResult.FAIL;
-                }
-                int duration = Main.CONFIG.getInt("overclockDuration");
-
-                world.playSound(null, player.getX(), player.getY(), player.getZ(),
-                        net.minecraft.sound.SoundEvents.ITEM_TRIDENT_THUNDER,
-                        net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                        net.minecraft.entity.effect.StatusEffects.SPEED, duration, 2)); // Speed 3 (amplifier is
-                                                                                        // 0-based)
-                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                        net.minecraft.entity.effect.StatusEffects.HASTE, duration, 4)); // Haste 5
-                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                        net.minecraft.entity.effect.StatusEffects.GLOWING, duration, 0));
-
-                // Start cooldown after effects are done
-                Main.scheduler.schedule(() -> {
-                    world.playSound(null, player.getX(), player.getY(), player.getZ(),
-                            net.minecraft.sound.SoundEvents.BLOCK_BEACON_DEACTIVATE,
-                            net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-                    OVERCLOCK_COOLDOWNS.put(id, System.currentTimeMillis());
-                    player.sendMessage(Text.literal("§bOverclock Recharging!"), true);
-                }, duration * 50); // duration is in ticks, convert to ms
-
-                player.sendMessage(Text.literal("§bOverclock Activated!"), true);
-                player.playSound(SoundEvents.ITEM_TOTEM_USE, 1f, 1f);
-
-                return ActionResult.SUCCESS;
+                return overclock(player, (ServerWorld) world) ? ActionResult.SUCCESS : ActionResult.FAIL;
             }
             return ActionResult.PASS;
         });
@@ -463,5 +393,102 @@ public class Weapons {
                 }
             }
         });
+    }
+
+    private static boolean phaseChange(ServerPlayerEntity player, ServerWorld world) {
+        UUID id = player.getUuid();
+        long now = System.currentTimeMillis();
+        Long last = PHASE_CHANGE_COOLDOWNS.get(id);
+        if (last != null && now - last < PHASE_CHANGE_COOLDOWN_MS) {
+            return false;
+        }
+
+        // Compute teleport target
+        Vec3d eye = player.getCameraPosVec(1.0f);
+        Vec3d look = player.getRotationVec(1.0f).normalize();
+        Vec3d far = eye.add(look.multiply(15.0));
+
+        // Raycast (stop at first block hit)
+        BlockHitResult hit = world.raycast(new RaycastContext(
+                eye, far,
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                player));
+
+        Vec3d target = hit.getType() == HitResult.Type.BLOCK
+                // Back off one step so we don’t end up inside a block
+                ? hit.getPos().subtract(look.multiply(1.0))
+                : far;
+
+        DustParticleEffect purple = new DustParticleEffect(0xDE7AFA, 3f);
+        int steps = 20;
+        for (int i = 0; i <= steps; i++) {
+            double t = i / (double) steps;
+            Vec3d point = eye.lerp(target, t);
+            if (world instanceof ServerWorld sw) {
+                sw.spawnParticles(purple,
+                        point.x, point.y, point.z,
+                        1, 0, 0, 0, 0);
+            }
+        }
+
+        // Teleport on server
+        // Make an empty flag set so you can teleport to the air
+        Set<PositionFlag> flags = EnumSet.noneOf(PositionFlag.class);
+        player.teleport(
+                (ServerWorld) world,
+                target.x, target.y, target.z,
+                flags,
+                player.getYaw(), player.getPitch(),
+                false // Don't reset camera
+        );
+        world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                net.minecraft.sound.SoundEvents.ENTITY_ENDER_EYE_DEATH,
+                net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+        world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                net.minecraft.sound.SoundEvents.ENTITY_ENDERMAN_TELEPORT,
+                net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+
+        // Record cooldown
+        PHASE_CHANGE_COOLDOWNS.put(id, now);
+        player.sendMessage(Text.literal("§aPhase Changed!"), true);
+        player.playSound(SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
+        return true;
+    }
+
+    private static boolean overclock(ServerPlayerEntity player, ServerWorld world) {
+        UUID id = player.getUuid();
+        long now = System.currentTimeMillis();
+        Long last = OVERCLOCK_COOLDOWNS.get(id);
+        long cooldown = 45000; // 45 seconds in ms
+        if (last != null && now - last < cooldown) {
+            return false;
+        }
+        int duration = Main.CONFIG.getInt("overclockDuration");
+
+        world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                net.minecraft.sound.SoundEvents.ITEM_TRIDENT_THUNDER,
+                net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+        player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                net.minecraft.entity.effect.StatusEffects.SPEED, duration, 2)); // Speed 3 (amplifier is
+                                                                                // 0-based)
+        player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                net.minecraft.entity.effect.StatusEffects.HASTE, duration, 4)); // Haste 5
+        player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                net.minecraft.entity.effect.StatusEffects.GLOWING, duration, 0));
+
+        // Start cooldown after effects are done
+        Main.scheduler.schedule(() -> {
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    net.minecraft.sound.SoundEvents.BLOCK_BEACON_DEACTIVATE,
+                    net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
+            OVERCLOCK_COOLDOWNS.put(id, System.currentTimeMillis());
+            player.sendMessage(Text.literal("§bOverclock Recharging!"), true);
+        }, duration * 50); // duration is in ticks, convert to ms
+
+        player.sendMessage(Text.literal("§bOverclock Activated!"), true);
+        player.playSound(SoundEvents.ITEM_TOTEM_USE, 1f, 1f);
+
+        return true;
     }
 }

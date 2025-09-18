@@ -12,7 +12,6 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -54,8 +53,10 @@ public class Mortals {
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
                 if (!((ImmortalsData) player).isImmortal()) {
                     player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                            net.minecraft.entity.effect.StatusEffects.HERO_OF_THE_VILLAGE, 60, 2)); // Hero of the
-                                                                                                    // Village III
+                            net.minecraft.entity.effect.StatusEffects.HERO_OF_THE_VILLAGE, 60, 2, false, false)); // Hero
+                                                                                                                  // of
+                                                                                                                  // the
+                    // Village III
                 }
             }
 
@@ -168,11 +169,15 @@ public class Mortals {
             }
             ItemStack stack = player.getStackInHand(hand);
             ImmortalsData data = (ImmortalsData) player;
-            if (data.isImmortal()) {
-                return ActionResult.PASS;
-            }
 
             if (stack.getItem() == ModItems.HEART) {
+                if (data.isImmortal()) {
+                    player.sendMessage(
+                            Text.literal(
+                                    "An Immortal does not require hearts to become strong."),
+                            false);
+                    return ActionResult.PASS;
+                }
                 EntityAttributeInstance curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                 if (curr_hp.getBaseValue() < 40.0) {
                     curr_hp.setBaseValue(curr_hp.getBaseValue() + 2.0);
@@ -189,6 +194,13 @@ public class Mortals {
                     return ActionResult.FAIL;
                 }
             } else if (stack.getItem() == ModItems.ARTIFICIAL_HEART) {
+                if (data.isImmortal()) {
+                    player.sendMessage(
+                            Text.literal(
+                                    "You scratched your head and couldn't figure out how to use the item."),
+                            false);
+                    return ActionResult.PASS;
+                }
                 EntityAttributeInstance curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                 if (curr_hp.getBaseValue() < 14.0) { // 7 hearts
                     curr_hp.setBaseValue(curr_hp.getBaseValue() + 2.0);
@@ -200,6 +212,13 @@ public class Mortals {
                     return ActionResult.FAIL;
                 }
             } else if (stack.getItem() == Items.TOTEM_OF_UNDYING && stack.contains(DataComponentTypes.CUSTOM_DATA)) {
+                if (data.isImmortal()) {
+                    player.sendMessage(
+                            Text.literal(
+                                    "The talisman rejects your corrupted touch."),
+                            false);
+                    return ActionResult.PASS;
+                }
                 // Cooldown logic: use a persistent NBT tag to store last use timestamp
                 long currentTime = world.getTime(); // world time in ticks
                 NbtCompound customData = stack.get(DataComponentTypes.CUSTOM_DATA).copyNbt();
@@ -478,9 +497,9 @@ public class Mortals {
                                         return 1;
                                     }))));
         });
-        // Register 'render' command
+        // Register 'render' command (debug)
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            dispatcher.register(CommandManager.literal("render")
+            dispatcher.register(CommandManager.literal("render").requires(source -> source.hasPermissionLevel(4))
                     .then(CommandManager.literal("sphere")
                             .then(CommandManager.argument("r", IntegerArgumentType.integer(0, 255))
                                     .then(CommandManager.argument("g", IntegerArgumentType.integer(0, 255))
@@ -509,7 +528,7 @@ public class Mortals {
                                                                                 (float) player.getY(),
                                                                                 (float) player.getZ(),
                                                                                 size, 500);
-                                                                        ServerPlayNetworking.send(player, payload);
+                                                                        Utils.sendPayloadToNearby(player, payload);
                                                                         player.sendMessage(
                                                                                 Text.literal("§aRendered sphere."),
                                                                                 false);
@@ -523,9 +542,22 @@ public class Mortals {
                                         String id = StringArgumentType.getString(ctx,
                                                 "id");
                                         NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload(
-                                                id, player.getX(), player.getY(), player.getZ(), 100.0f, 500);
-                                        ServerPlayNetworking.send(player, payload);
+                                                id, player.getX(), player.getY(), player.getZ(), 14.0f, 500);
+                                        Utils.sendPayloadToNearby(player, payload);
                                         player.sendMessage(Text.literal("§aRendered rune: " + id), false);
+                                        return 1;
+                                    })))
+                    .then(CommandManager.literal("item")
+                            .then(CommandManager
+                                    .argument("itemId", IntegerArgumentType.integer(0))
+                                    .executes(ctx -> {
+                                        ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                        int itemId = IntegerArgumentType.getInteger(ctx, "itemId");
+                                        NetworkChannels.ItemS2CPayload payload = new NetworkChannels.ItemS2CPayload(
+                                                player.getX(), player.getY(), player.getZ(), player.getX(),
+                                                player.getY() + 5, player.getZ(), itemId, 2.0f, 250);
+                                        Utils.sendPayloadToNearby(player, payload);
+                                        player.sendMessage(Text.literal("§aRendered item: " + itemId), false);
                                         return 1;
                                     }))));
         });

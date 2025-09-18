@@ -92,14 +92,14 @@ public class Spell {
                                         // Refuse if the player doesn't have enough slots and is not replacing a
                                         // non-free spell (dragon ascent and timeslow)
                                         int allowedSlots = Math.min(corr, Main.CONFIG.getInt("maxSpellSlots"));
-                                        if (allowedSlots <= SpellRegistry.getNumBound(player)
+                                        if (allowedSlots < SpellRegistry.getNumBound(player)
                                                 && (bound == null
                                                         || "dragon_ascent".equals(bound.getId())
                                                         || "timeslow".equals(bound.getId()))) {
                                             player.sendMessage(
                                                     Text.literal("§cYou have " + allowedSlots
                                                             + " available spell slots. Run /unbind [spell] to free up a slot!"),
-                                                    true);
+                                                    false);
                                             return 0;
                                         }
 
@@ -289,13 +289,14 @@ public class Spell {
                         int secondsLeft = entry.getValue();
 
                         if (secondsLeft > 0) {
-                            if (spell.equals(currentSpell)) {
-                                player.sendMessage(
-                                        Text.literal("§c" + spell.getDisplayName() + ": " + secondsLeft + "s"), true);
-                            }
+                            // if (spell.equals(currentSpell)) {
+                            // player.sendMessage(
+                            // Text.literal("§c" + spell.getDisplayName() + ": " + secondsLeft + "s"),
+                            // true);
+                            // }
                             entry.setValue(secondsLeft - 1);
                         } else {
-                            if (!spell.getId().equals("splinter_blow")) {
+                            if (secondsLeft != -1 && !spell.getId().equals("splinter_blow")) {
                                 player.sendMessage(Text.literal("§a" + spell.getDisplayName() + " ready!"), true);
                                 cooldownIterator.remove();
                             }

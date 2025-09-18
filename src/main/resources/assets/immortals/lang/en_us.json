@@ -9,5 +9,7 @@
     "item.immortals.timekeeper": "Timekeeper",
     "item.immortals.chronoreaver": "NUL-02 Chronoreaver",
     "item.immortals.augmentation_core": "Augmentation Core",
-    "death.attack.spell": "§c%1$s was killed by %2$s’s spell"
+    "death.attack.spell": "§c%1$s was extinguished by %2$s’s spell",
+    "key.immortals.cast_spell": "Cast spell or use abilities",
+    "category.immortals": "Immortals SMP"
 }

@@ -9,6 +9,7 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.HoverEvent;
@@ -16,10 +17,14 @@ import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.BlockStateRaycastContext;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.component.type.AttributeModifierSlot;
 import net.minecraft.component.type.AttributeModifiersComponent;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.advancement.AdvancementProgress;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.attribute.EntityAttribute;
@@ -31,6 +36,7 @@ import net.minecraft.util.Identifier;
 
 import com.immortals.Immortal.SpellRegistry;
 import com.immortals.api.ImmortalsData;
+import com.immortals.network.NetworkChannels;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -39,6 +45,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.Entity;
 
 public class Utils {
@@ -77,6 +84,7 @@ public class Utils {
             case DASH, GLOW -> 1;
             case BLACKOUT, FROSTBITE -> 2;
             case PERSIST, SPLINTER_BLOW -> 3;
+            case GAMBLE, WAVE -> 4;
             case FRAGMENT, BEAM -> 5;
             default -> 0;
         };
@@ -110,10 +118,20 @@ public class Utils {
         }
 
         if (level >= 2) {
-            // +2: Speed II, Strength II
+            // +2: Speed II
             player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, duration, 1, false, false));
+        }
+
+        if (level >= 3) {
+            // +3: Strength 2
             player.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.STRENGTH, duration, 1, false, false));
+        }
+
+        if (level >= 4) {
+            // +4: Weaving I
+            player.addStatusEffect(
+                    new StatusEffectInstance(StatusEffects.WEAVING, duration, 0, false, false));
         }
     }
 
@@ -121,7 +139,7 @@ public class Utils {
             { "dash", "glow" },
             { "frostbite", "blackout" },
             { "persist", "splinter_blow" },
-            {},
+            { "gamble", "wave" },
             { "fragment", "beam" }
     };
 
@@ -216,6 +234,28 @@ public class Utils {
         return null;
     }
 
+    public static boolean canSee(ServerPlayerEntity user, ServerPlayerEntity other) {
+        // Check if the user is within 15 blocks of the other player
+        if (user.squaredDistanceTo(other) > 15 * 15) {
+            return false;
+        }
+
+        // Check if the user is looking at the other player
+        Vec3d userLook = user.getRotationVec(1.0f).normalize();
+        Vec3d directionToOther = other.getPos().subtract(user.getPos()).normalize();
+        double dotProduct = userLook.dotProduct(directionToOther);
+        if (dotProduct < Math.cos(Math.toRadians(30))) { // 30 degrees threshold
+            return false;
+        }
+
+        // Check if there are no blocks between the user and the other player
+        Vec3d userEyePos = user.getEyePos();
+        Vec3d otherEyePos = other.getEyePos();
+        return user.getWorld().raycast(new RaycastContext(
+                userEyePos, otherEyePos, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, user))
+                .getType() == net.minecraft.util.hit.HitResult.Type.MISS;
+    }
+
     public static void augmentationAnimation(ItemStack copy, Item item, ServerPlayerEntity player) {
         if (!(player.getWorld() instanceof ServerWorld serverWorld))
             return;
@@ -231,64 +271,40 @@ public class Utils {
         Vec3d pos1 = eyePos.add(left);
         Vec3d pos2 = eyePos.add(right);
 
-        // Spawn the two item entities
-        Entity itemEntity1 = net.minecraft.entity.EntityType.ITEM.create(
-                serverWorld,
-                null,
-                new BlockPos((int) pos1.x, (int) pos1.y, (int) pos1.z),
-                SpawnReason.TRIGGERED,
-                false,
-                false);
-        Entity itemEntity2 = net.minecraft.entity.EntityType.ITEM.create(
-                serverWorld,
-                null,
-                new BlockPos((int) pos2.x, (int) pos2.y, (int) pos2.z),
-                SpawnReason.TRIGGERED,
-                false,
-                false);
+        // The final position is the midpoint between pos1 and pos2
+        Vec3d finalPos = pos1.add(pos2).multiply(0.5);
 
-        if (itemEntity1 == null || itemEntity2 == null)
-            return;
+        int animDuration = 60;
 
-        itemEntity1.setPosition(pos1);
-        itemEntity2.setPosition(pos2);
+        // Send two packets: one for the left item, one for the right item
+        NetworkChannels.ItemS2CPayload payloadLeft = new NetworkChannels.ItemS2CPayload(
+                pos1.x, pos1.y, pos1.z, finalPos.x, finalPos.y, finalPos.z, Item.getRawId(item), (float) 1.0,
+                animDuration);
+        NetworkChannels.ItemS2CPayload payloadRight = new NetworkChannels.ItemS2CPayload(
+                pos2.x, pos2.y, pos2.z, finalPos.x, finalPos.y, finalPos.z, Item.getRawId(ModItems.AUGMENTATION_CORE),
+                (float) 1.0, animDuration);
 
-        ((net.minecraft.entity.ItemEntity) itemEntity1).setStack(new ItemStack(item));
-        ((net.minecraft.entity.ItemEntity) itemEntity2)
-                .setStack(new ItemStack(com.immortals.ModItems.AUGMENTATION_CORE));
+        for (ServerPlayerEntity p : PlayerLookup.world((ServerWorld) player.getWorld())) {
+            ServerPlayNetworking.send(p, payloadLeft);
+            ServerPlayNetworking.send(p, payloadRight);
+        }
 
-        // Make the item entities ignore gravity
-        ((net.minecraft.entity.ItemEntity) itemEntity1).setNoGravity(true);
-        ((net.minecraft.entity.ItemEntity) itemEntity2).setNoGravity(true);
-
-        serverWorld.spawnEntity(itemEntity1);
-        serverWorld.spawnEntity(itemEntity2);
-
-        // Animate the items moving together over a longer duration (e.g., 40 steps)
-        final int steps = 100;
-        for (int i = 1; i <= steps; i++) {
+        // Animate a trail of particles from pos1 and pos2 to finalPos
+        int steps = 30;
+        for (int i = 0; i <= steps; i++) {
             final int step = i;
             Main.scheduler.schedule(() -> {
                 double t = step / (double) steps;
-                Vec3d interp1 = pos1.lerp(eyePos, t);
-                Vec3d interp2 = pos2.lerp(eyePos, t);
-                serverWorld.getServer().execute(() -> {
-                    itemEntity1.setPosition(interp1);
-                    itemEntity2.setPosition(interp2);
-                    // Add some particles along the path for visual effect
-                    serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
-                            interp1.x, interp1.y, interp1.z, 2, 0.05, 0.05, 0.05, 0.01);
-                    serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
-                            interp2.x, interp2.y, interp2.z, 2, 0.05, 0.05, 0.05, 0.01);
-                });
-            }, step);
+                Vec3d trail1 = pos1.lerp(finalPos, t);
+                Vec3d trail2 = pos2.lerp(finalPos, t);
+                serverWorld.spawnParticles(ParticleTypes.ENCHANT, trail1.x, trail1.y, trail1.z, 2, 0, 0, 0, 0.01);
+                serverWorld.spawnParticles(ParticleTypes.ENCHANT, trail2.x, trail2.y, trail2.z, 2, 0, 0, 0, 0.01);
+            }, animDuration / 20 * step);
         }
 
         Main.scheduler.schedule(() -> {
             // Remove the items and spawn a blue particle explosion at eye level
             serverWorld.getServer().execute(() -> {
-                itemEntity1.discard();
-                itemEntity2.discard();
                 serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
                         eyePos.x, eyePos.y, eyePos.z, 60, 0.4, 0.4, 0.4, 0.15);
                 serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.EXPLOSION,
@@ -305,13 +321,22 @@ public class Utils {
                     false);
             if (summonedItem != null) {
                 summonedItem.setPosition(eyePos);
-                ((net.minecraft.entity.ItemEntity) summonedItem).setStack(copy);
+                ((ItemEntity) summonedItem).setStack(copy);
                 serverWorld.spawnEntity(summonedItem);
                 // Add a burst of particles to highlight the new item
                 serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.HAPPY_VILLAGER,
                         eyePos.x, eyePos.y, eyePos.z, 20, 0.2, 0.2, 0.2, 0.2);
             }
-        }, steps + 20);
+        }, animDuration);
+    }
+
+    // Sends a client payload to all players nearby the given player
+    public static void sendPayloadToNearby(ServerPlayerEntity player, CustomPayload payload) {
+        ServerPlayNetworking.send(player, payload);
+        for (ServerPlayerEntity p : PlayerLookup
+                .tracking(player)) {
+            ServerPlayNetworking.send(p, payload);
+        }
     }
 
     // Dragon ascent breath particles at pos

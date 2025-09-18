@@ -42,7 +42,7 @@ public abstract class ActiveTargetGoalMixin {
             // reflectively access the 'mob' field declared in TrackTargetGoal (superclass)
             Field mobField = ActiveTargetGoal.class.getSuperclass().getDeclaredField("mob");
             mobField.setAccessible(true);
-            MobEntity mob = (MobEntity) mobField.get(this);
+            MobEntity mob = ((TrackTargetGoalAccessor) this).getMob();
             if (mob == null)
                 return;
 
@@ -55,9 +55,6 @@ public abstract class ActiveTargetGoalMixin {
             if (mob instanceof HostileEntity) {
                 // clear the candidate target so the ActiveTargetGoal won't start
                 ((ActiveTargetGoal<?>) (Object) this).setTargetEntity(null);
-                // debug log (optional)
-                System.out.println("[Immortals] Cleared targetEntity of " + mob.getClass().getSimpleName()
-                        + " because target is Immortal " + sp.getName().getString());
             }
 
         } catch (NoSuchFieldException e) {

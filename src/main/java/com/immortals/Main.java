@@ -49,6 +49,12 @@ public class Main implements ModInitializer {
 		PayloadTypeRegistry.playS2C().register(NetworkChannels.RuneS2CPayload.ID, NetworkChannels.RuneS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(NetworkChannels.SphereS2CPayload.ID,
 				NetworkChannels.SphereS2CPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(NetworkChannels.ItemS2CPayload.ID,
+				NetworkChannels.ItemS2CPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(NetworkChannels.SpellC2SPayload.ID,
+				NetworkChannels.SpellC2SPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(NetworkChannels.FragmentC2SPayload.ID,
+				NetworkChannels.FragmentC2SPayload.CODEC);
 
 		// Register a server tick event to process scheduled tasks
 		ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
