@@ -35,11 +35,7 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
     @Unique
     private String on_hit_spell = "";
     @Unique
-    private boolean shrink_active = false;
-    @Unique
-    private String last_spell = "";
-    @Unique
-    private int remainingFragments = 0;
+    private String linked = null;
     @Unique
     private final Map<UUID, Pair<Integer, Long>> combo_counts = new HashMap<>();
 
@@ -51,9 +47,7 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
         is_immortal = view.getBoolean("Immortals:Ascended", false);
         abilities_disabled = view.getBoolean("Immortals:AbilitiesDisabled", false);
         on_hit_spell = view.getString("Immortals:OnHitSpell", "");
-        shrink_active = view.getBoolean("Immortals:ShrinkActive", false);
-        last_spell = view.getString("Immortals:LastSpell", "");
-        remainingFragments = view.getInt("Immortals:RemainingFragments", 0);
+        linked = view.getString("Immortals:Linked", null);
 
         // trusted: typed list of strings (UUID strings)
         view.getOptionalTypedListView("Immortals:Trusted", Codec.STRING).ifPresent(list -> {
@@ -98,9 +92,8 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
         view.putBoolean("Immortals:Ascended", is_immortal);
         view.putBoolean("Immortals:AbilitiesDisabled", abilities_disabled);
         view.putString("Immortals:OnHitSpell", on_hit_spell);
-        view.putBoolean("Immortals:ShrinkActive", shrink_active);
-        view.putString("Immortals:LastSpell", last_spell);
-        view.putInt("Immortals:RemainingFragments", remainingFragments);
+        if (linked != null)
+            view.putString("Immortals:Linked", linked);
 
         // trusted: typed list of strings
         var trustedAppender = view.getListAppender("Immortals:Trusted", Codec.STRING);
@@ -156,23 +149,13 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
     }
 
     @Override
-    public boolean isShrinkActive() {
-        return shrink_active;
+    public UUID getLinked() {
+        return linked != null ? UUID.fromString(linked) : null;
     }
 
     @Override
-    public void setShrinkActive(boolean active) {
-        shrink_active = active;
-    }
-
-    @Override
-    public String getLastSpell() {
-        return last_spell;
-    }
-
-    @Override
-    public void setLastSpell(String spellId) {
-        last_spell = spellId;
+    public void setLinked(UUID uuid) {
+        linked = uuid != null ? uuid.toString() : null;
     }
 
     @Override

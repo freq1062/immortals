@@ -16,7 +16,8 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.immortals.Main"
+			"com.immortals.Main",
+			"com.immortals.entity.ImmortalEntity"
 		],
 		"client": [
 			"com.immortals.ImmortalsClient"

@@ -1,9 +1,11 @@
 package com.immortals.Immortal;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 
@@ -44,10 +46,10 @@ public class Spell {
                                             }
                                         }
 
-                                        if (Utils.inventoryHas(player, Items.DRAGON_EGG) != null) {
+                                        if (Utils.inventoryHas(player, Items.DRAGON_EGG) != -1) {
                                             suggestions.add("dragon_ascent");
                                         }
-                                        if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != null) {
+                                        if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1) {
                                             suggestions.add("timeslow");
                                         }
                                         for (String spellId : suggestions) {
@@ -67,14 +69,14 @@ public class Spell {
                                             return 0;
                                         }
                                         if (!((ImmortalsData) player).isImmortal()) {
-                                            player.sendMessage(Text.literal("§cYou must be ascended to bind spells!"),
+                                            player.sendMessage(Text.literal("§bYou must be ascended to bind spells!"),
                                                     true);
                                             return 0;
                                         }
                                         // Special case for dragon_ascent and timeslow
                                         if ("dragon_ascent".equals(spell.getId()) || "timeslow".equals(spell.getId())) {
                                             SpellRegistry.bind(player, slot, spell);
-                                            player.sendMessage(Text.literal("§aSpell bound to slot " + (slot + 1)),
+                                            player.sendMessage(Text.literal("Spell bound to slot " + (slot + 1)),
                                                     true);
                                             return 1;
                                         }
@@ -82,7 +84,7 @@ public class Spell {
                                         int requiredCorr = Utils.getRequiredCorr(spell);
                                         if (requiredCorr > 0 && corr < requiredCorr) {
                                             player.sendMessage(
-                                                    Text.literal("§cYou need at least " + requiredCorr
+                                                    Text.literal("§cYou require at least " + requiredCorr
                                                             + " corruption to bind this spell."),
                                                     true);
                                             return 0;
@@ -104,7 +106,7 @@ public class Spell {
                                         }
 
                                         SpellRegistry.bind(player, slot, spell);
-                                        player.sendMessage(Text.literal("§aSpell bound to slot " + (slot + 1)),
+                                        player.sendMessage(Text.literal("Spell bound to slot " + (slot + 1)),
                                                 true);
                                         return 1;
                                     }))));
@@ -136,7 +138,7 @@ public class Spell {
 
                                 // Add to trusted list
                                 playerData.addTrusted(targetUuid);
-                                player.sendMessage(Text.literal("§aTrusted " + targetPlayer.getName().getString()),
+                                player.sendMessage(Text.literal("Trusted " + targetPlayer.getName().getString()),
                                         true);
                                 return 1;
                             })));
@@ -152,16 +154,16 @@ public class Spell {
                                 List<UUID> trusted = playerData.getTrusted();
 
                                 if (trusted.isEmpty()) {
-                                    player.sendMessage(Text.literal("§eYou haven't trusted any players yet."), false);
+                                    player.sendMessage(Text.literal("You haven't trusted any players yet."), false);
                                 } else {
-                                    player.sendMessage(Text.literal("§eTrusted players:"), false);
+                                    player.sendMessage(Text.literal("§cTrusted players:"), false);
                                     MinecraftServer server = ctx.getSource().getServer();
 
                                     for (UUID uuid : trusted) {
                                         String name = server.getUserCache().getByUuid(uuid)
                                                 .map(profile -> profile.getName())
                                                 .orElse("Unknown Player");
-                                        player.sendMessage(Text.literal("§f- " + name), false);
+                                        player.sendMessage(Text.literal("- " + name), false);
                                     }
                                 }
 
@@ -195,7 +197,7 @@ public class Spell {
 
                                 // Remove from trusted list
                                 playerData.removeTrusted(targetUuid);
-                                player.sendMessage(Text.literal("§aUntrusted " + targetPlayer.getName().getString()),
+                                player.sendMessage(Text.literal("Untrusted " + targetPlayer.getName().getString()),
                                         true);
                                 return 1;
                             })));
@@ -228,10 +230,10 @@ public class Spell {
                                         }
                                     }
                                     if (anyUnbound) {
-                                        player.sendMessage(Text.literal("§aAll spells unbound."), true);
+                                        player.sendMessage(Text.literal("All spells unbound."), true);
                                         return 1;
                                     } else {
-                                        player.sendMessage(Text.literal("§eNo spells to unbind."), true);
+                                        player.sendMessage(Text.literal("No spells to unbind."), true);
                                         return 0;
                                     }
                                 }
@@ -239,32 +241,43 @@ public class Spell {
                                 SpellRegistry spell = SpellRegistry.fromId(spellId);
 
                                 if (spell == null) {
-                                    player.sendMessage(Text.literal("Unknown spell: " + spellId), false);
+                                    player.sendMessage(Text.literal("§cUnknown spell: " + spellId), false);
                                     return 0;
                                 }
 
                                 SpellRegistry.unbind(player, spell);
-                                player.sendMessage(Text.literal("§aSpell unbound: " + spell.getDisplayName()),
+                                player.sendMessage(Text.literal("Spell unbound: " + spell.getDisplayName()),
                                         true);
                                 return 1;
                             })));
         });
 
-        // Display spell name when switching hotbar slots
         ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+
+            if (server.getTicks() % 20 == 0) {
+                Set<UUID> onlinePlayers = new HashSet<>();
+                server.getPlayerManager().getPlayerList().forEach(player -> onlinePlayers.add(player.getUuid()));
+
+                // Clear pending cooldown notifications and last slot for players who are not
+                // online
+                pendingCooldownNotifications.keySet().removeIf(playerId -> !onlinePlayers.contains(playerId));
+                lastSlot.keySet().removeIf(playerId -> !onlinePlayers.contains(playerId));
+            }
 
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
                 UUID id = player.getUuid();
                 int current = player.getInventory().getSelectedSlot();
                 int previous = lastSlot.getOrDefault(id, -1);
 
-                // Display spell name when switching hotbar slots
                 if (current != previous) {
                     lastSlot.put(id, current);
-
+                    // Display spell name when switching hotbar slots
                     SpellRegistry bound = SpellRegistry.getBound(player, current);
+
                     if (bound != null && SpellRegistry.canUse(player, bound) && ((ImmortalsData) player).isImmortal()) {
-                        player.sendMessage(Text.literal("§e" + bound.getDisplayName()), true);
+                        Utils.sendSpellInfoToPlayer(player, bound.getId(), Utils.currentSpellState(player, bound),
+                                Utils.currentCooldown(player, bound), bound.getCooldownTicks());
+                        player.sendMessage(Text.literal("§6" + bound.getDisplayName()), true);
                     }
                 }
             }
@@ -289,14 +302,14 @@ public class Spell {
                         int secondsLeft = entry.getValue();
 
                         if (secondsLeft > 0) {
-                            // if (spell.equals(currentSpell)) {
-                            // player.sendMessage(
-                            // Text.literal("§c" + spell.getDisplayName() + ": " + secondsLeft + "s"),
-                            // true);
-                            // }
                             entry.setValue(secondsLeft - 1);
                         } else {
-                            if (secondsLeft != -1 && !spell.getId().equals("splinter_blow")) {
+                            if (secondsLeft != -1 && !spell.getId().equals("splinter_blow")
+                                    && SpellRegistry.getSlot(player, spell) != -1) {
+                                if (spell == currentSpell) {
+                                    Utils.sendSpellInfoToPlayer(player, spell.getId(), "ready",
+                                            0, spell.getCooldownTicks());
+                                }
                                 player.sendMessage(Text.literal("§a" + spell.getDisplayName() + " ready!"), true);
                                 cooldownIterator.remove();
                             }

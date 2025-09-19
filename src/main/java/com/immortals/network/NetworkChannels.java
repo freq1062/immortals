@@ -7,7 +7,6 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.network.packet.CustomPayload;
 
-// common class
 public final class NetworkChannels {
         // Runes
         public record RuneS2CPayload(String spellId, double x, double y, double z, float maxSize, int lifetimeTicks)
@@ -77,6 +76,47 @@ public final class NetworkChannels {
                                 PacketCodecs.FLOAT, ItemS2CPayload::size,
                                 PacketCodecs.INTEGER, ItemS2CPayload::lifetimeTicks,
                                 ItemS2CPayload::new);
+
+                @Override
+                public Id<? extends CustomPayload> getId() {
+                        return ID;
+                }
+        }
+
+        // Spell indicators in HUD
+        public record SpellHudS2CPayload(String spellID, String state, int currCooldown, int maxCooldown)
+                        implements CustomPayload {
+                public static final Identifier HUD_PAYLOAD_ID = Identifier
+                                .of("immortals", "hud");
+                public static final CustomPayload.Id<SpellHudS2CPayload> ID = new CustomPayload.Id<>(
+                                HUD_PAYLOAD_ID);
+                public static final PacketCodec<RegistryByteBuf, SpellHudS2CPayload> CODEC = PacketCodec.tuple(
+                                PacketCodecs.STRING, SpellHudS2CPayload::spellID,
+                                PacketCodecs.STRING, SpellHudS2CPayload::state,
+                                PacketCodecs.INTEGER, SpellHudS2CPayload::currCooldown,
+                                PacketCodecs.INTEGER, SpellHudS2CPayload::maxCooldown,
+                                SpellHudS2CPayload::new);
+
+                @Override
+                public Id<? extends CustomPayload> getId() {
+                        return ID;
+                }
+        }
+
+        // Ghost afterimage
+        // Spell indicators in HUD
+        public record GhostS2CPayload(double x, double y, double z, int lifetimeTicks)
+                        implements CustomPayload {
+                public static final Identifier HUD_PAYLOAD_ID = Identifier
+                                .of("immortals", "ghost");
+                public static final CustomPayload.Id<GhostS2CPayload> ID = new CustomPayload.Id<>(
+                                HUD_PAYLOAD_ID);
+                public static final PacketCodec<RegistryByteBuf, GhostS2CPayload> CODEC = PacketCodec.tuple(
+                                PacketCodecs.DOUBLE, GhostS2CPayload::x,
+                                PacketCodecs.DOUBLE, GhostS2CPayload::y,
+                                PacketCodecs.DOUBLE, GhostS2CPayload::z,
+                                PacketCodecs.INTEGER, GhostS2CPayload::lifetimeTicks,
+                                GhostS2CPayload::new);
 
                 @Override
                 public Id<? extends CustomPayload> getId() {

@@ -36,12 +36,11 @@ import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-/*Implements the Immortals' corruption system.*/
+/*Implements the Immortals' corruption and spell system.*/
 public class Immortals {
 
     // Fragment related data structures
@@ -53,13 +52,14 @@ public class Immortals {
 
     public static void register() {
 
-        // Register spell activation
+        // Register spell activation from keybind
         ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.SpellC2SPayload.ID, (payload, context) -> {
             if (!(context.player() instanceof ServerPlayerEntity))
                 return;
             SpellRegistry.tryActivate(context.player(), null, payload.slot());
         });
 
+        // Register fragment activation from punching
         ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.FragmentC2SPayload.ID, (payload, context) -> {
             if (!(context.player() instanceof ServerPlayerEntity user))
                 return;
@@ -67,6 +67,7 @@ public class Immortals {
                 SpellRegistry.recordUse(user, SpellRegistry.FRAGMENT);
                 return;
             }
+            System.out.println("Throwing fragment");
             Vec3d playerPos = user.getPos();
             Vec3d lookVec = user.getRotationVec(1.0F).normalize();
             ServerWorld world = user.getWorld();
@@ -77,7 +78,6 @@ public class Immortals {
             // Set yaw and pitch to match player's look direction
             fragment.setYaw(user.getYaw());
             fragment.setPitch(user.getPitch());
-            // Use player's look direction directly for velocity
             fragment.setVelocity(lookVec.x * 1.5, lookVec.y * 1.5, lookVec.z * 1.5);
             fragment.setCustomNameVisible(true); // Make the ID visible
             fragment.setNoGravity(true); // Set no gravity
@@ -103,11 +103,22 @@ public class Immortals {
             }
             fragmentCount.put(user.getUuid(), fragmentCount.getOrDefault(user.getUuid(), 0) + 1);
             int remainingFragments = 3 - fragmentCount.getOrDefault(user.getUuid(), 0);
-            user.sendMessage(Text.literal("§d" + remainingFragments + " fragments remaining!"), true);
+            user.sendMessage(Text.literal(remainingFragments + " fragments remaining!"), true);
         });
 
-        // Passive abilities and spell activation
+        // Passive abilities and spell activation using shift + right click
         ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+
+            if (server.getTicks() % 20 == 0) {
+                // Ensure fragments, parent, and size are cleared for players who are not online
+                Set<UUID> onlinePlayers = new HashSet<>();
+                server.getPlayerManager().getPlayerList().forEach(player -> onlinePlayers.add(player.getUuid()));
+
+                fragments.entrySet().removeIf(entry -> !onlinePlayers.contains(entry.getKey().getUuid()));
+                parent.keySet().removeIf(player -> !onlinePlayers.contains(player.getUuid()));
+                size.keySet().removeIf(player -> !onlinePlayers.contains(player.getUuid()));
+            }
+
             // Fragment spell collision
             for (var entry : fragments.entrySet()) {
                 ServerPlayerEntity sp = entry.getKey();
@@ -133,15 +144,7 @@ public class Immortals {
                         });
             }
 
-            // Ensure fragments are removed if their owner disconnects
-            server.getPlayerManager().getPlayerList().forEach(player -> {
-                if (!fragments.containsKey(player)) {
-                    fragments.entrySet().removeIf(entry -> entry.getKey().getUuid().equals(player.getUuid()));
-                }
-            });
-
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-
                 // Make iron golems aggressive to immortal players, ignoring players in
                 // spectator and creative mode
                 if (((ImmortalsData) player).isImmortal() && !player.isSpectator() && !player.isCreative()) {
@@ -165,7 +168,7 @@ public class Immortals {
                 }
 
                 double baseAttack = player.getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE); // Default base value
-                if (Utils.inventoryHas(player, Items.DRAGON_EGG) != null && ((ImmortalsData) player).isImmortal()) {
+                if (Utils.inventoryHas(player, Items.DRAGON_EGG) != -1 && ((ImmortalsData) player).isImmortal()) {
                     // Only increase if not already increased
                     if (attackAttr != null && attackAttr.getValue() <= baseAttack) {
                         MutableText message = Text.literal("Unlocked ");
@@ -178,7 +181,7 @@ public class Immortals {
                         player.sendMessage(
                                 message.append(spellText)
                                         .append(" and gained +1 attack damage! Hover to see details!"));
-                        attackAttr.setBaseValue(2.0);
+                        attackAttr.setBaseValue(baseAttack + 1.0);
                     }
                 } else {
                     // Only decrease if currently increased
@@ -187,10 +190,11 @@ public class Immortals {
                     }
                 }
 
+                // Grant Haste II block break speed if player has Timekeeper and is immortal
                 EntityAttributeInstance blockBreakAttr = player
                         .getAttributeInstance(EntityAttributes.BLOCK_BREAK_SPEED);
                 double baseBreakAttr = 1.0; // Default base value
-                if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != null) {
+                if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1) {
                     // Only increase if not already increased
                     if (blockBreakAttr != null && blockBreakAttr.getValue() <= baseBreakAttr) {
                         if (((ImmortalsData) player).isImmortal()) {
@@ -213,13 +217,11 @@ public class Immortals {
                     }
                 }
 
-                // Remove "immortals:augmented" modifiers from all equipped items if player is
-                // ascended
                 if (((ImmortalsData) player).isImmortal()) {
                     java.util.function.Consumer<ItemStack> removeAugmented = stack -> {
                         if (Utils.hasAttribute(stack, "immortals:augmented")) {
                             Utils.removeModifierById(stack, "immortals:augmented");
-                            player.sendMessage(Text.literal("§cAugmentations removed from item."), false);
+                            player.sendMessage(Text.literal("Augmentations removed from item."), false);
                         }
                     };
                     for (int i = 0; i < player.getInventory().size(); i++) {
@@ -230,7 +232,6 @@ public class Immortals {
                     if (server.getTicks() % 40 == 0) {
                         Utils.applyCorruptionEffects(player);
                     }
-
                     // Automatically use Persist if health < 3 hearts
                     if (player.getHealth() < 6.0f) {
                         SpellRegistry.tryActivate(player, null, SpellRegistry.getSlot(player, SpellRegistry.PERSIST));
@@ -251,8 +252,8 @@ public class Immortals {
             }
 
             // Check if attacker is an ascended player and it was a full swing
-            if (!(world instanceof ServerWorld serverWorld) || !((ImmortalsData) sp).isImmortal()
-                    || sp.getAttackCooldownProgress(0.5F) < 0.84F)
+            if (!(world instanceof ServerWorld) || !((ImmortalsData) sp).isImmortal()
+                    || sp.getAttackCooldownProgress(0.5F) < 0.85F)
                 return ActionResult.PASS;
 
             // Check if the target is a player and is actively blocking with a shield
@@ -261,19 +262,27 @@ public class Immortals {
             }
             ImmortalsData user = (ImmortalsData) attacker;
 
-            // Activate on-hit spell if set
+            // Activate on-hit spell if previously activated
             String onHitSpell = user.onHitSpell();
             if (onHitSpell != "") {
                 switch (onHitSpell) {
                     case "frostbite" -> SpellRegistry.FROSTBITE.activate(sp, tp);
                     case "lock" -> SpellRegistry.LOCK.activate(sp, tp);
+                    case "link" -> {
+                        if (user.getLinked() != null) {
+                            sp.sendMessage(Text.literal("You are already linked to a player!"), true);
+                            return ActionResult.PASS;
+                        } else if (((ImmortalsData) tp).getLinked() != null) {
+                            sp.sendMessage(Text.literal("Target player is already linked to someone!"), true);
+                            return ActionResult.PASS;
+                        } else {
+                            SpellRegistry.LINK.activate(sp, tp);
+                        }
+                    }
                     default -> {
-                        // Invalid spell, do nothing
                         return ActionResult.PASS;
                     }
                 }
-                SpellRegistry.recordUse((ServerPlayerEntity) attacker, SpellRegistry.fromId(onHitSpell));
-                user.setLastSpell(onHitSpell);
                 user.setOnHitSpell("");
             }
 
@@ -301,7 +310,7 @@ public class Immortals {
             return ActionResult.PASS;
         });
 
-        // Reset combo count on player being hit by another player
+        // Reset combo count for specific players
         ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, amount, taken, blocked) -> {
             if (entity instanceof ServerPlayerEntity sp && !blocked
                     && source.getAttacker() instanceof ServerPlayerEntity) {
@@ -317,12 +326,12 @@ public class Immortals {
                         ServerPlayerEntity player = ctx.getSource().getPlayer();
                         ImmortalsData playerData = (ImmortalsData) player;
                         if (!playerData.isImmortal()) {
-                            player.sendMessage(Text.literal("You do not have corruption as a mortal."),
+                            player.sendMessage(Text.literal("§bYou do not have corruption as a mortal."),
                                     false);
                             return 0;
                         }
                         int corruptionLevel = playerData.getCorruption();
-                        player.sendMessage(Text.literal("Your corruption level is: " + corruptionLevel), false);
+                        player.sendMessage(Text.literal("§cYour corruption level is: " + corruptionLevel), false);
                         return 1;
                     }));
         });
@@ -333,11 +342,11 @@ public class Immortals {
             ImmortalsData oldData = (ImmortalsData) oldPlayer;
             ImmortalsData newData = (ImmortalsData) newPlayer;
 
-            // copy ascension & corruption
+            // Copy ascension & corruption
             newData.setImmortal(oldData.isImmortal());
-            newData.setCorruption(oldData.getCorruption() - 1); // lose 1 corruption on death
+            newData.setCorruption(oldData.getCorruption() - 1); // Lose 1 corruption on death
 
-            // copy spell bindings
+            // Copy spell bindings
             newData.getSpellBindings().clear();
             newData.getSpellBindings().putAll(oldData.getSpellBindings());
 
@@ -348,14 +357,14 @@ public class Immortals {
                             || e.getValue().equals("dragon_ascent")
                             || e.getValue().equals("timeslow"));
 
-            // copy trusted list
+            // Copy trusted list
             newData.getTrusted().clear();
             newData.getTrusted().addAll(oldData.getTrusted());
         });
 
         // Send decreased corruption message on respawn
         ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
-            // Get the player's UUID and reset their tick rate
+            // Make sure tick rate is reset
             ImmortalsData newPlayerData = (ImmortalsData) newPlayer;
             try {
                 Main.api.rateEntity(newPlayer, 20);
@@ -371,7 +380,7 @@ public class Immortals {
                 }
                 int next = Utils.nextShardCost(corr);
                 newPlayer.sendMessage(
-                        Text.literal("§5You feel weakened. Corruption: §l" + corr + "§r. Next: " + next),
+                        Text.literal("§cYou feel weakened. Corruption: " + corr + "Next: " + next),
                         true);
             }
         });
@@ -387,7 +396,7 @@ public class Immortals {
                     // banned ):
                     MinecraftServer server = victim.getServer();
                     if (server != null) {
-                        // Schedule the ban on the next server tick to avoid race conditions
+                        // Schedule the ban on the next server tick
                         server.execute(() -> {
                             String playerName = victim.getName().getString();
                             String reason = "\"You have lost all your corruption levels!\"";
@@ -398,23 +407,19 @@ public class Immortals {
                     }
                 } else {
                     if (attackerImmortal) {
-                        // Scale the soul shard drop count based on victim's max health
-                        int dropCount = 1;
-                        double maxHearts = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue()
-                                / 2.0;
-                        // Don't drop if the victim has less than 5 hearts
-                        if (maxHearts <= 5)
-                            dropCount = 0;
-                        victim.dropItem(new ItemStack(ModItems.SOUL_SHARD, dropCount), false);
+                        victim.dropItem(new ItemStack(ModItems.SOUL_SHARD, 1), false);
                     }
                 }
 
                 // +3 on-kill ability
                 if (attacker instanceof ServerPlayerEntity killer
                         && ((ImmortalsData) killer).getCorruption() >= 3) {
-                    // heal 6.0f = 3 hearts
-                    killer.heal(6.0f);
-                    killer.sendMessage(Text.literal("§aYou are empowered on kill... (healed 3 hearts)"), true);
+                    // Heal to full health
+                    killer.setHealth(killer.getMaxHealth());
+                    // Apply Speed III effect for 3 seconds
+                    killer.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                            net.minecraft.entity.effect.StatusEffects.SPEED, 60, 2));
+                    killer.sendMessage(Text.literal("§cYou are empowered on kill..."), true);
                 }
             }
         });
@@ -423,19 +428,15 @@ public class Immortals {
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
             if (entity instanceof ServerPlayerEntity player) {
                 if (((ImmortalsData) player).isImmortal()) {
-                    // If player is ascended, prevent totem from saving them
                     ItemStack totem = null;
-                    // Check main hand and offhand for totem
                     if (player.getMainHandStack().getItem() == Items.TOTEM_OF_UNDYING) {
                         totem = player.getMainHandStack();
                     } else if (player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) {
                         totem = player.getOffHandStack();
                     }
                     if (totem != null && !totem.isEmpty()) {
-                        // Remove the totem and block its effect
                         totem.decrement(1);
                         player.sendMessage(Text.literal("§cYour totem broke lol"), true);
-                        return false; // Prevent totem from working
                     }
                 }
             }
@@ -450,9 +451,8 @@ public class Immortals {
             ItemStack stack = player.getStackInHand(hand);
             ImmortalsData playerData = (ImmortalsData) player;
 
-            // Ascension Totem: Update objective hasAscended
+            // Totem of Ascension: Become immortal
             if (stack.getItem() == ModItems.ASCENSION_TOTEM) {
-
                 if (!playerData.isImmortal()) {
                     // Give starting corruption levels based on hearts
                     double curr_hp = player.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue();
@@ -474,7 +474,8 @@ public class Immortals {
                     // Reset health
                     player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0);
                     player.sendMessage(
-                            Text.literal("You feel a surge of divine power! Began at " + start_level + " corruption."),
+                            Text.literal(
+                                    "§cYou feel a surge of divine power! Began at " + start_level + " corruption."),
                             true);
 
                     // Play totem animation and particles
@@ -493,7 +494,7 @@ public class Immortals {
                     Utils.grant((ServerPlayerEntity) player, "an_immortal");
                     return ActionResult.SUCCESS;
                 } else {
-                    player.sendMessage(Text.literal("You have already ascended. There is no going back!"), true);
+                    player.sendMessage(Text.literal("§cYou have already ascended. There is no going back!"), true);
                     return ActionResult.FAIL;
                 }
             }
@@ -501,16 +502,15 @@ public class Immortals {
             // Soul Shard: Increase your corruption
             if (stack.getItem() == ModItems.SOUL_SHARD) {
                 if (!playerData.isImmortal()) {
-                    player.sendMessage(Text.literal("You must ascend to grow stronger..."), true);
+                    player.sendMessage(Text.literal("§cYou must ascend to absorb souls..."), true);
                     return ActionResult.FAIL;
                 }
                 int corruption = playerData.getCorruption();
-                // Player can increase corruption
                 if (corruption < 5) {
                     int cost = Utils.nextShardCost(corruption);
 
                     if (stack.getCount() < cost) {
-                        player.sendMessage(Text.literal("Require " + cost + " Soul Shards to increase corruption."),
+                        player.sendMessage(Text.literal("§cRequire " + cost + " Soul Shards to increase corruption."),
                                 true);
                         return ActionResult.FAIL;
                     }
@@ -520,7 +520,7 @@ public class Immortals {
                     // New corruption level
                     corruption = playerData.getCorruption();
                     player.sendMessage(
-                            Text.literal("§5You grow stronger. Corruption: §l" + corruption + "§r. Next: "
+                            Text.literal("§cYou grow stronger. Corruption: " + corruption + ". Next: "
                                     + Utils.nextShardCost(corruption)),
                             true);
 
@@ -540,7 +540,7 @@ public class Immortals {
                     }
                     return ActionResult.SUCCESS;
                 } else {
-                    player.sendMessage(Text.literal("Your soul has reached its peak."), true);
+                    player.sendMessage(Text.literal("§cYour soul has reached its peak."), true);
                     return ActionResult.FAIL;
                 }
             }
@@ -553,16 +553,16 @@ public class Immortals {
                     int newLvl = playerData.getCorruption();
                     int next = Utils.nextShardCost(newLvl);
                     if (newLvl == 0) {
-                        // Reset health to 10 hearts
+                        // Reset health to 10 hearts if coming from -1
                         player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(20.0);
                     }
                     stack.decrement(1);
                     player.sendMessage(
-                            Text.literal("§5You feel renewed. Corruption: §l" + newLvl + "§r. Next: " + next),
+                            Text.literal("§cYou feel renewed. Corruption: " + newLvl + ". Next: " + next),
                             true);
                     return ActionResult.SUCCESS;
                 }
-                player.sendMessage(Text.literal("Soul purifier cannot increase corruption beyond +0."), true);
+                player.sendMessage(Text.literal("§cSoul purifier cannot increase corruption beyond +0."), true);
                 return ActionResult.FAIL;
             }
 

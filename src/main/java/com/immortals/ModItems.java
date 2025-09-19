@@ -18,70 +18,134 @@ import net.minecraft.component.type.LoreComponent;
 import java.util.function.Function;
 
 public class ModItems {
+
+        public static LoreComponent getFormattedLore(String itemName) {
+                String lore;
+                switch (itemName) {
+                        case "ascension_totem" -> {
+                                lore = """
+                                                §cSome say that the First Immortal lives on in this item.
+                                                §bOnce you ascend, you will never be able to return to your mortal life.
+                                                        """;
+
+                        }
+                        case "ascension_relic" -> {
+                                lore = """
+                                                §cThese relics were manifested long ago
+                                                from an intense fear of death.
+                                                """;
+                        }
+                        case "soul_purifier" -> {
+                                lore = """
+                                                §cA concentrated piece of positive magic. However,
+                                                The soul purifier can return your soul to its original state.
+                                                """;
+                        }
+                        case "soul_shard" -> {
+                                lore = """
+                                                §cA shard of the victim's soul, corrupted by Immortal power.
+                                                """;
+                        }
+                        case "heart" -> {
+                                lore = """
+                                                §bA piece of mortal essence.
+                                                """;
+                        }
+                        case "artificial_heart" -> {
+                                lore = """
+                                                §bA piece of natural essence,
+                                                carefully crafted to imitate a heart.
+                                                It can only heal you to your base state.
+                                                """;
+                        }
+                        case "augmentation_core" -> {
+                                lore = """
+
+                                                §bTo compete with magical powers, Mortal ingenuity
+                                                discovered how to augment the attributes of various items.
+
+                                                §fHold an unstackable item in your offhand while holding this
+                                                item in your main hand, and right click to augment it. Does not stack.
+                                                """;
+                        }
+                        case "phasebreaker" -> {
+                                lore = String.format("""
+                                                §dA blade forged from space folded into itself.
+
+                                                §6§lFRACTAL EDGE: §fEvery %d hits, the sword induces a
+                                                flurry of hits on the target dealing %.2f%%
+                                                of their max health as damage.
+
+                                                §6§lPHASE CHANGE: §fPress your activate spell key or
+                                                Shift + right click to teleport in the direction
+                                                you are facing. Does not go through walls.
+                                                §a %d s seconds cooldown.
+                                                """,
+                                                Main.CONFIG.getInt("fractalEdgeHits"),
+                                                Main.CONFIG.getDouble("fractalEdgeDmg") * 100,
+                                                Main.CONFIG.getInt("phaseChangeCooldown") / 20);
+                        }
+                        case "chronoreaver" -> {
+                                lore = String.format("""
+                                                §iCrafted in the Null Space where time collapses,
+                                                Each strike lands before it is swung.
+
+                                                §6§lOVERCLOCK: Shift + right click to apply haste 5 and speed
+                                                3 for %d seconds. §a%d second cooldown.
+
+                                                §6§lBLINK: When below %.2f%% health, the axe applies true
+                                                invisibility for %d seconds.
+                                                §a%d second cooldown.
+                                                """,
+                                                Main.CONFIG.getInt("overclockDuration") / 20,
+                                                Main.CONFIG.getInt("overclockCooldown") / 20,
+                                                Main.CONFIG.getDouble("blinkThreshold") * 10,
+                                                Main.CONFIG.getInt("blinkDuration") / 20,
+                                                Main.CONFIG.getInt("blinkCooldown") / 20);
+                        }
+                        case "timekeeper" -> {
+                                lore = """
+                                                §eThe timekeeper runs, maintaining the flow of time in the universe.
+                                                §eThose who possess it have the power to manipulate time itself.
+                                                """;
+                        }
+                        default -> {
+                                lore = "No lore found for item: " + itemName;
+                        }
+                }
+                lore = lore.replaceAll("\n", "\\\\n").replaceAll("\\s+", " ").trim();
+                String[] parts = lore.split("(?=§[0-9a-fk-or])");
+                java.util.List<net.minecraft.text.Text> formattedLore = new java.util.ArrayList<>();
+                for (String part : parts) {
+                        formattedLore.add(net.minecraft.text.Text.literal(part));
+                }
+                return new LoreComponent(formattedLore);
+        }
+
         public static final Item ASCENSION_TOTEM = registerItem("ascension_totem", Item::new,
                         new Item.Settings()
                                         .rarity(Rarity.EPIC)
-                                        .component(DataComponentTypes.LORE,
-                                                        new LoreComponent(
-                                                                        java.util.List.of(
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "§4Some say that the First Immortal lives on in this item."),
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "§4Once you ascend, you will never be able to return to your mortal life."))))
+                                        .component(DataComponentTypes.LORE, getFormattedLore("ascension_totem"))
                                         .maxCount(1)
                                         .fireproof());
 
         public static final Item ASCENSION_RELIC = registerItem("ascension_relic", Item::new,
                         new Item.Settings()
-                                        .component(DataComponentTypes.LORE,
-                                                        new LoreComponent(
-                                                                        java.util.List.of(
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "§4These relics were manifested from the intense fear of death."))))
+                                        .component(DataComponentTypes.LORE, getFormattedLore("ascension_relic"))
                                         .rarity(Rarity.RARE));
 
         public static final Item SOUL_PURIFIER = registerItem("soul_purifier", Item::new,
                         new Item.Settings()
                                         .component(DataComponentTypes.LORE,
-                                                        new LoreComponent(
-                                                                        java.util.List.of(
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "The soul purifier can return your soul to its original state.")))));
+                                                        getFormattedLore("soul_purifier")));
         public static final Item SOUL_SHARD = registerItem("soul_shard", Item::new, new Item.Settings()
-                        .component(DataComponentTypes.LORE,
-                                        new LoreComponent(
-                                                        java.util.List.of(
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        "§4A shard of the victim's soul, corrupted by Immortal power.")))));
+                        .component(DataComponentTypes.LORE, getFormattedLore("soul_shard")));
         public static final Item HEART = registerItem("heart", Item::new, new Item.Settings()
-                        .component(DataComponentTypes.LORE,
-                                        new LoreComponent(
-                                                        java.util.List.of(
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        "§cA piece of mortal essence.")))));
+                        .component(DataComponentTypes.LORE, getFormattedLore("heart")));
         public static final Item ARTIFICIAL_HEART = registerItem("artificial_heart", Item::new, new Item.Settings()
-                        .component(DataComponentTypes.LORE,
-                                        new LoreComponent(
-                                                        java.util.List.of(
-                                                                        net.minecraft.text.Text.literal(
-                                                                                        "§cA piece of natural essence, shaped to imitate a heart.")))));
-        public static final Item AUGMENTATION_CORE = registerItem("augmentation_core", Item::new,
-                        new Item.Settings()
-                                        .component(DataComponentTypes.LORE,
-                                                        new LoreComponent(
-                                                                        java.util.List.of(
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "To compete with magical powers, Mortal ingenuity"),
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "discovered how to augment the attributes of various items."),
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        ""),
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "Run /augment while holding your unstackable item of choice"),
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "in your main hand, and two random attributes will be applied."),
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "Does not stack.")))));
+                        .component(DataComponentTypes.LORE, getFormattedLore("artificial_heart")));
+        public static final Item AUGMENTATION_CORE = registerItem("augmentation_core", Item::new, new Item.Settings()
+                        .component(DataComponentTypes.LORE, getFormattedLore("augmentation_core")));
 
         public static final Item PHASEBREAKER = registerItem(
                         "phasebreaker",
@@ -92,18 +156,7 @@ public class ModItems {
                                         .sword(ToolMaterial.NETHERITE, 8 - 1, -2.4F)
                                         .component(
                                                         DataComponentTypes.LORE,
-                                                        new LoreComponent(
-                                                                        java.util.List.of(
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "§dForged from space folded into itself, the blade can cut through reality."),
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "§aFRACTAL EDGE: Every 7 hits, the sword induces a flurry of hits on the target."),
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "§aPHASE CHANGE: Shift + right click to teleport in the direction you are facing. ok so "
-                                                                                                                        + (Main.CONFIG
-                                                                                                                                        .getInt("phaseChangeCooldown")
-                                                                                                                                        / 1000)
-                                                                                                                        + " seconds cooldown."))))
+                                                        getFormattedLore("phasebreaker"))
                                         .enchantable(15));
 
         public static final Item CHRONOREAVER = registerItem(
@@ -118,53 +171,16 @@ public class ModItems {
                                         .rarity(Rarity.EPIC)
                                         .component(
                                                         DataComponentTypes.LORE,
-                                                        new LoreComponent(
-                                                                        java.util.List.of(
-                                                                                        net.minecraft.text.Text
-                                                                                                        .literal(
-                                                                                                                        "§eCrafted in the Null Space where time collapses,"),
-                                                                                        net.minecraft.text.Text
-                                                                                                        .literal(
-                                                                                                                        "§eEach strike lands before it is swung."),
-                                                                                        net.minecraft.text.Text
-                                                                                                        .literal(
-                                                                                                                        "§aOVERCLOCK: Shift + right click to apply haste 5 and speed 3 for "
-                                                                                                                                        + (Main.CONFIG
-                                                                                                                                                        .getInt("overclockDuration")
-                                                                                                                                                        / 1000)
-                                                                                                                                        + " seconds."),
-                                                                                        net.minecraft.text.Text
-                                                                                                        .literal("§a" +
-                                                                                                                        (Main.CONFIG
-                                                                                                                                        .getInt("overclockCooldown")
-                                                                                                                                        / 1000)
-                                                                                                                        + " second cooldown."),
-                                                                                        net.minecraft.text.Text
-                                                                                                        .literal(
-                                                                                                                        "§aBLINK: When below 50% health, the axe applies true invisibility for "
-                                                                                                                                        + (Main.CONFIG
-                                                                                                                                                        .getInt("blinkDuration")
-                                                                                                                                                        / 1000)
-                                                                                                                                        + " seconds."),
-                                                                                        net.minecraft.text.Text
-                                                                                                        .literal("§a" +
-                                                                                                                        (Main.CONFIG
-                                                                                                                                        .getInt("blinkCooldown")
-                                                                                                                                        / 1000)
-                                                                                                                        + " second cooldown.")))
+                                                        getFormattedLore("chronoreaver")
 
                                         )
                                         .enchantable(15));
-        // of 15
 
         public static final Item TIMEKEEPER = registerItem("timekeeper", Item::new,
                         new Item.Settings()
                                         .rarity(Rarity.EPIC)
                                         .component(DataComponentTypes.LORE,
-                                                        new LoreComponent(
-                                                                        java.util.List.of(
-                                                                                        net.minecraft.text.Text.literal(
-                                                                                                        "§eThe timekeeper runs, maintaining the flow of time in the universe."))))
+                                                        getFormattedLore("timekeeper"))
                                         .maxCount(1));
 
         public static Item registerItem(String name, Function<Item.Settings, Item> factory, Item.Settings settings) {
@@ -181,6 +197,9 @@ public class ModItems {
                 entries.add(HEART);
                 entries.add(ARTIFICIAL_HEART);
                 entries.add(AUGMENTATION_CORE);
+                entries.add(PHASEBREAKER);
+                entries.add(CHRONOREAVER);
+                entries.add(TIMEKEEPER);
         }
 
         public static void registerModItems() {

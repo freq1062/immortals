@@ -25,6 +25,7 @@ public class FragmentEntity extends Entity {
         this.creator = creator; // Initialize creator
     }
 
+    // This one is apparently required by the Entity superclass
     public FragmentEntity(EntityType<? extends FragmentEntity> type, World world) {
         super(type, world);
         this.age = 0; // Initialize age
@@ -33,18 +34,15 @@ public class FragmentEntity extends Entity {
 
     @Override
     protected void initDataTracker(net.minecraft.entity.data.DataTracker.Builder builder) {
-        // No data to track
     }
 
     @Override
     public boolean damage(ServerWorld world, DamageSource source, float amount) {
-        // No custom damage logic
         return false;
     }
 
     @Override
     protected void readCustomData(ReadView nbt) {
-        // Read age from NBT
         if (nbt.contains("Age")) {
             this.age = nbt.getInt("Age", 101);
         }
@@ -85,7 +83,7 @@ public class FragmentEntity extends Entity {
         }
 
         // Remove fragment after 5 seconds
-        if (this.getAge() > 100) { // Use getAge() if available
+        if (this.getAge() > 100) {
             this.remove(Entity.RemovalReason.DISCARDED);
         }
     }
@@ -96,7 +94,7 @@ public class FragmentEntity extends Entity {
     }
 
     public int getAge() {
-        return this.age; // Getter for age
+        return this.age;
     }
 
     public ServerPlayerEntity getCreator() {

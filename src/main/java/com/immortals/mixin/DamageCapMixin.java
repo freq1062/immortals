@@ -1,7 +1,6 @@
 package com.immortals.mixin;
 
 import com.immortals.api.ImmortalsData;
-import com.immortals.Main;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,13 +18,9 @@ public abstract class DamageCapMixin {
         if (!entity.getWorld().isClient() && entity instanceof net.minecraft.server.network.ServerPlayerEntity player) {
             ImmortalsData data = (ImmortalsData) player;
             if (data.isImmortal()) {
+                // Allow /kill to still work
                 if (cir.getReturnValue() >= 1_000_000.0f) {
                     return;
-                }
-                // Apply shrink damage multiplier if shrink is active
-                if (data.isShrinkActive()) {
-                    float prev = cir.getReturnValue();
-                    cir.setReturnValue(prev * (float) Main.CONFIG.getDouble("shrinkDamageMultiplier"));
                 }
 
                 float maxAllowed = player.getMaxHealth() * 0.6f;

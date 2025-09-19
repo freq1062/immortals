@@ -4,17 +4,28 @@ import org.joml.Matrix4f;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
-
+import net.minecraft.client.data.Models;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.VertexConsumers;
+import net.minecraft.client.render.entity.EntityRenderDispatcher;
+import net.minecraft.client.render.entity.PlayerEntityRenderer;
+import net.minecraft.client.render.entity.model.BipedEntityModel;
+import net.minecraft.client.render.entity.model.PlayerEntityModel;
+import net.minecraft.client.render.entity.state.BipedEntityRenderState;
+import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemDisplayContext;
+import net.minecraft.util.Arm;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
@@ -70,57 +81,43 @@ public class ClientUtils {
                                 .overlay(OverlayTexture.DEFAULT_UV).light(240, 240).normal(entry, 0.0f, 1.0f, 0.0f);
         }
 
-        // Renders a sphere of the given size at (x,y,z)
+        // Renders a sphere of the given size at (x,y,z) with redundant panels for full
+        // coverage
         public static void renderSphere(WorldRenderContext context, double x, double y, double z, float[] color,
                         float size) {
-                // Log the initial parameters
-                System.out.println("Rendering sphere at position: [" + x + ", " + y + ", " + z + "]");
-                System.out.println("Sphere size: " + size + ", color: [" +
-                                java.util.stream.IntStream.range(0, color.length)
-                                                .mapToObj(i -> String.valueOf(color[i]))
-                                                .collect(java.util.stream.Collectors.joining(", "))
-                                + "]");
-
                 ClientWorld world = context.world();
                 Camera camera = context.camera();
                 Vec3d camPos = camera.getPos();
                 MatrixStack matrices = context.matrixStack();
                 VertexConsumerProvider consumers = context.consumers();
-                if (world == null || consumers == null) {
-                        System.out.println("Error: world or consumers is null");
+                if (world == null || consumers == null)
                         return;
-                }
 
                 float camX = (float) camPos.x, camY = (float) camPos.y, camZ = (float) camPos.z;
-                System.out.println("Camera position: [" + camX + ", " + camY + ", " + camZ + "]");
 
                 matrices.push();
                 matrices.translate((float) (x - camX), (float) (y - camY), (float) (z - camZ));
-                long time = System.currentTimeMillis();
-                float rotation = (float) ((time / 20.0) % 360.0);
-                matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotation));
-                System.out.println("Applied rotation: " + rotation);
 
+                // Get color components with default alpha of 1.0 if not specified
+                float r = color[0];
+                float g = color[1];
+                float b = color[2];
+                float a = color.length > 3 ? color[3] : 1.0f;
+
+                // Create a vertex consumer for our sphere
                 VertexConsumer vc = context.consumers()
-                                .getBuffer(RenderLayer.getEntitySolid(
+                                .getBuffer(RenderLayer.getEntityTranslucent(
                                                 Identifier.of("immortals", "textures/quads/white.png")));
 
                 MatrixStack.Entry entry = matrices.peek();
                 Matrix4f modelMat = entry.getPositionMatrix();
 
-                // Increase these for a smoother sphere (more costly)
-                final int latitudeBands = 12; // Increased for smoother sphere
-                final int longitudeBands = 24; // Increased for smoother sphere
+                // Use more bands for a smoother sphere
+                final int latitudeBands = 12;
+                final int longitudeBands = 24;
                 final float radius = size / 2f;
 
-                System.out.println("Sphere rendering parameters: radius=" + radius +
-                                ", latitudeBands=" + latitudeBands +
-                                ", longitudeBands=" + longitudeBands);
-
-                float r = color[0];
-                float g = color[1];
-                float b = color[2];
-                float a = color.length > 3 ? color[3] : 1.0f;
+                int light = 0xF000F0; // Full brightness
 
                 for (int lat = 0; lat < latitudeBands; lat++) {
                         float theta1 = (float) (lat * Math.PI / latitudeBands);
@@ -130,14 +127,7 @@ public class ClientUtils {
                                 float phi1 = (float) (lon * 2.0 * Math.PI / longitudeBands);
                                 float phi2 = (float) ((lon + 1) * 2.0 * Math.PI / longitudeBands);
 
-                                // Debug first and last vertices
-                                if (lat == 0 && lon == 0) {
-                                        System.out.println("First quad calculation: lat=" + lat + ", lon=" + lon);
-                                        System.out.println("Angles: theta1=" + theta1 + ", theta2=" + theta2 +
-                                                        ", phi1=" + phi1 + ", phi2=" + phi2);
-                                }
-
-                                // Four vertices of the quad
+                                // Calculate the four vertices of the quad
                                 float x1 = (float) (radius * Math.sin(theta1) * Math.cos(phi1));
                                 float y1 = (float) (radius * Math.cos(theta1));
                                 float z1 = (float) (radius * Math.sin(theta1) * Math.sin(phi1));
@@ -154,22 +144,13 @@ public class ClientUtils {
                                 float y4 = (float) (radius * Math.cos(theta2));
                                 float z4 = (float) (radius * Math.sin(theta2) * Math.sin(phi1));
 
-                                // Print first quad vertex info
-                                if (lat == 0 && lon == 0) {
-                                        System.out.println("First quad vertices:");
-                                        System.out.println("v1: [" + x1 + ", " + y1 + ", " + z1 + "]");
-                                        System.out.println("v2: [" + x2 + ", " + y2 + ", " + z2 + "]");
-                                        System.out.println("v3: [" + x3 + ", " + y3 + ", " + z3 + "]");
-                                        System.out.println("v4: [" + x4 + ", " + y4 + ", " + z4 + "]");
-                                }
-
-                                // Normals (normalized vertex positions)
+                                // normals (pointing outward)
                                 float nx1 = x1 / radius, ny1 = y1 / radius, nz1 = z1 / radius;
                                 float nx2 = x2 / radius, ny2 = y2 / radius, nz2 = z2 / radius;
                                 float nx3 = x3 / radius, ny3 = y3 / radius, nz3 = z3 / radius;
                                 float nx4 = x4 / radius, ny4 = y4 / radius, nz4 = z4 / radius;
 
-                                // UV coordinates
+                                // uvs
                                 float u1 = (float) lon / longitudeBands;
                                 float v1 = (float) lat / latitudeBands;
                                 float u2 = (float) (lon + 1) / longitudeBands;
@@ -179,9 +160,14 @@ public class ClientUtils {
                                 float u4 = u1;
                                 float v4 = v3;
 
-                                int light = 0xF000F0; // Fullbright
+                                // Ensure consistent UVs at the poles
+                                if (lat == 0) {
+                                        v1 = 0;
+                                } else if (lat == latitudeBands - 1) {
+                                        v3 = 1;
+                                }
 
-                                // First triangle - v1, v2, v3 (corrected winding order for counterclockwise)
+                                // First triangle (v1, v2, v3) - clockwise winding
                                 vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
                                                 .overlay(OverlayTexture.DEFAULT_UV).light(light)
                                                 .normal(entry, nx1, ny1, nz1);
@@ -192,7 +178,18 @@ public class ClientUtils {
                                                 .overlay(OverlayTexture.DEFAULT_UV).light(light)
                                                 .normal(entry, nx3, ny3, nz3);
 
-                                // Second triangle - v1, v3, v4 (counterclockwise winding)
+                                // First triangle again with counterclockwise winding (redundant)
+                                // vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
+                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                // .normal(entry, nx1, ny1, nz1);
+                                // vc.vertex(modelMat, x3, y3, z3).color(r, g, b, a).texture(u3, v3)
+                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                // .normal(entry, nx3, ny3, nz3);
+                                // vc.vertex(modelMat, x2, y2, z2).color(r, g, b, a).texture(u2, v2)
+                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                // .normal(entry, nx2, ny2, nz2);
+
+                                // Second triangle (v1, v3, v4) - clockwise winding
                                 vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
                                                 .overlay(OverlayTexture.DEFAULT_UV).light(light)
                                                 .normal(entry, nx1, ny1, nz1);
@@ -202,15 +199,44 @@ public class ClientUtils {
                                 vc.vertex(modelMat, x4, y4, z4).color(r, g, b, a).texture(u4, v4)
                                                 .overlay(OverlayTexture.DEFAULT_UV).light(light)
                                                 .normal(entry, nx4, ny4, nz4);
+
+                                // Second triangle again with counterclockwise winding (redundant)
+                                // vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
+                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                // .normal(entry, nx1, ny1, nz1);
+                                // vc.vertex(modelMat, x4, y4, z4).color(r, g, b, a).texture(u4, v4)
+                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                // .normal(entry, nx4, ny4, nz4);
+                                // vc.vertex(modelMat, x3, y3, z3).color(r, g, b, a).texture(u3, v3)
+                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                // .normal(entry, nx3, ny3, nz3);
+
+                                // Additional redundant quads in different orders for full coverage
+                                // Triangle (v2, v3, v4)
+                                vc.vertex(modelMat, x2, y2, z2).color(r, g, b, a).texture(u2, v2)
+                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                                .normal(entry, nx2, ny2, nz2);
+                                vc.vertex(modelMat, x3, y3, z3).color(r, g, b, a).texture(u3, v3)
+                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                                .normal(entry, nx3, ny3, nz3);
+                                vc.vertex(modelMat, x4, y4, z4).color(r, g, b, a).texture(u4, v4)
+                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                                .normal(entry, nx4, ny4, nz4);
+
+                                // Triangle (v1, v2, v4)
+                                vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
+                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                                .normal(entry, nx1, ny1, nz1);
+                                vc.vertex(modelMat, x2, y2, z2).color(r, g, b, a).texture(u2, v2)
+                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                                .normal(entry, nx2, ny2, nz2);
+                                vc.vertex(modelMat, x4, y4, z4).color(r, g, b, a).texture(u4, v4)
+                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                                                .normal(entry, nx4, ny4, nz4);
                         }
                 }
 
-                System.out.println("Sphere rendering completed.");
                 matrices.pop();
-        }
-
-        public static void renderFragments() {
-                // rotate 45 on z
         }
 
         public static void renderItem(WorldRenderContext context, Item item, double x1, double y1, double z1, double x2,
@@ -262,6 +288,70 @@ public class ClientUtils {
                                 consumers,
                                 0xF000F0,
                                 OverlayTexture.DEFAULT_UV);
+                matrices.pop();
+        }
+
+        public static void renderPlayerGhost(WorldRenderContext context,
+                        ClientPlayerEntity player,
+                        double x, double y, double z,
+                        float[] rgba) {
+                if (player == null || context.consumers() == null || context.world() == null)
+                        return;
+
+                MinecraftClient client = MinecraftClient.getInstance();
+                Camera camera = context.camera();
+                MatrixStack matrices = context.matrixStack();
+                Vec3d camPos = camera.getPos();
+
+                // RGBA
+                float r = rgba[0];
+                float g = rgba[1];
+                float b = rgba[2];
+                float a = rgba.length > 3 ? rgba[3] : 1.0f;
+
+                // Get player renderer and model
+                EntityRenderDispatcher dispatcher = client.getEntityRenderDispatcher();
+                PlayerEntityRenderer playerRenderer = (PlayerEntityRenderer) dispatcher.getRenderer(player);
+                if (playerRenderer == null)
+                        return;
+
+                // Use the renderer's model instance (do NOT create a new model each frame)
+                PlayerEntityModel model = playerRenderer.getModel();
+
+                // Prepare vertex consumer and transform to the snapshot position
+                VertexConsumerProvider.Immediate immediate = MinecraftClient.getInstance().getBufferBuilders()
+                                .getEntityVertexConsumers();
+
+                matrices.push();
+
+                // Translate to desired world position relative to camera
+                matrices.translate((float) (x - camPos.x), (float) (y - camPos.y), (float) (z - camPos.z));
+
+                // Rotate world yaw so the player faces the same direction as the live player.
+                // Use negative yaw because matrix rotation is clockwise for positive degrees;
+                // player yaw is standard world heading
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-player.getYaw()));
+
+                // Correct the upside-down issue by rotating the model 180 degrees around the
+                // X-axis
+                matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(180));
+
+                // Choose a blank white texture and render layer
+                Identifier blankTexture = Identifier.of("immortals", "textures/quads/white.png");
+                RenderLayer layer = RenderLayer.getEntityTranslucent(blankTexture);
+
+                VertexConsumer consumer = immediate.getBuffer(layer);
+
+                int light = 0xF000F0; // fullbright for ghost effect — change if you want world lighting
+
+                int color = ((int) (r * 255) << 24) | ((int) (g * 255) << 16) | ((int) (b * 255) << 8)
+                                | (int) (a * 255);
+                // Render the model geometry with color + alpha
+                model.render(matrices, consumer, light, OverlayTexture.DEFAULT_UV, color);
+
+                // flush buffers of the immediate provider
+                immediate.draw();
+
                 matrices.pop();
         }
 }

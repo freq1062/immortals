@@ -110,7 +110,7 @@ public class Mortals {
                 EntityAttributeInstance new_hp = newPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                 new_hp.setBaseValue(old_hp.getBaseValue() - 2.0);
                 newPlayer.sendMessage(
-                        Text.literal("§5You lost a heart."),
+                        Text.literal("§bYou lost a heart."),
                         true);
             }
         });
@@ -137,23 +137,12 @@ public class Mortals {
                         return;
                     }
                     if (victimData.isImmortal()) {
-                        int corr = victimData.getCorruption();
                         if (!(attacker instanceof ServerPlayerEntity)) {
                             // Victim immortal, but killed by non player
-                            int shardsToGive = switch (corr) {
-                                case 3 -> 2;
-                                default -> 1;
-                            };
-                            victim.dropItem(new ItemStack(ModItems.SOUL_SHARD, shardsToGive), false);
+                            victim.dropItem(new ItemStack(ModItems.SOUL_SHARD, 1), false);
                         } else {
                             // Victim immortal, killed by mortal player
-                            int heartsToGive = switch (corr) {
-                                case 2 -> 2;
-                                case 3 -> 3;
-                                default -> 1;
-                            };
-
-                            victim.dropItem(new ItemStack(ModItems.HEART, heartsToGive), false);
+                            victim.dropItem(new ItemStack(ModItems.HEART, 1), false);
                         }
                     } else {
                         victim.dropItem(new ItemStack(ModItems.HEART, 1), false);
@@ -174,7 +163,7 @@ public class Mortals {
                 if (data.isImmortal()) {
                     player.sendMessage(
                             Text.literal(
-                                    "An Immortal does not require hearts to become strong."),
+                                    "§cAn Immortal does not require hearts to become strong."),
                             false);
                     return ActionResult.PASS;
                 }
@@ -189,7 +178,7 @@ public class Mortals {
                     }
                     return ActionResult.SUCCESS;
                 } else {
-                    player.sendMessage(Text.literal("§5You have reached the maximum number of hearts."),
+                    player.sendMessage(Text.literal("§bYou have reached the maximum number of hearts."),
                             true);
                     return ActionResult.FAIL;
                 }
@@ -197,7 +186,7 @@ public class Mortals {
                 if (data.isImmortal()) {
                     player.sendMessage(
                             Text.literal(
-                                    "You scratched your head and couldn't figure out how to use the item."),
+                                    "§cYou scratched your head and couldn't figure out how to use the item."),
                             false);
                     return ActionResult.PASS;
                 }
@@ -207,7 +196,7 @@ public class Mortals {
                     stack.decrement(1);
                     return ActionResult.SUCCESS;
                 } else {
-                    player.sendMessage(Text.literal("§5Artificial heart can only recover up to 7 hearts."),
+                    player.sendMessage(Text.literal("§bArtificial heart can only recover up to 7 hearts."),
                             true);
                     return ActionResult.FAIL;
                 }
@@ -215,7 +204,7 @@ public class Mortals {
                 if (data.isImmortal()) {
                     player.sendMessage(
                             Text.literal(
-                                    "The talisman rejects your corrupted touch."),
+                                    "§cThe talisman rejects your corrupted touch."),
                             false);
                     return ActionResult.PASS;
                 }
@@ -227,7 +216,7 @@ public class Mortals {
                             ? customData.getLong("lastTalismanUse").orElse(0L)
                             : 0L;
                     if (currentTime - lastUsed < 100) { // 5 seconds = 100 ticks
-                        player.sendMessage(Text.literal("§cTalisman is recharging!"), true);
+                        player.sendMessage(Text.literal("Talisman is recharging!"), true);
                         return ActionResult.FAIL;
                     }
                     net.minecraft.nbt.NbtList augmentList = customData.getList("augment")
@@ -270,19 +259,20 @@ public class Mortals {
                 if (data.isImmortal()) {
                     player.sendMessage(
                             Text.literal(
-                                    "You scratched your head and couldn't figure out how to use the core."),
+                                    "§cYou scratched your head and couldn't figure out how to use the core."),
                             false);
                     return ActionResult.PASS;
                 }
                 ItemStack stackToAugment = player.getOffHandStack();
                 if (stackToAugment.isEmpty()) {
-                    player.sendMessage(Text.literal("Hold the item you would like to augment in your offhand!"), false);
+                    player.sendMessage(Text.literal("§bHold the item you would like to augment in your offhand!"),
+                            false);
                     return ActionResult.PASS;
                 } else if (stackToAugment.getCount() != 1) {
-                    player.sendMessage(Text.literal("You can only augment an item stack of size 1."), false);
+                    player.sendMessage(Text.literal("§bYou can only augment an item stack of size 1."), false);
                     return ActionResult.PASS;
                 } else if (Utils.hasAttribute(stackToAugment, "immortals:augmented")) {
-                    player.sendMessage(Text.literal("This item has already been augmented."), true);
+                    player.sendMessage(Text.literal("§bThis item has already been augmented."), true);
                     return ActionResult.PASS;
                 }
 
@@ -337,7 +327,7 @@ public class Mortals {
                                     .styled(style -> style.withItalic(false).withColor(0xAAAAAA)));
                     stackToAugment.set(DataComponentTypes.LORE, new net.minecraft.component.type.LoreComponent(lore));
 
-                    player.sendMessage(Text.literal("§aAugmented into a " + talismanName + "!"), false);
+                    player.sendMessage(Text.literal("§bAugmented into a " + talismanName + "!"), false);
                 } else {
                     // Augment as usual
                     for (java.util.AbstractMap.SimpleEntry<RegistryEntry<EntityAttribute>, Float> entry : Augmentation
@@ -371,8 +361,11 @@ public class Mortals {
                                 int amntToWithdraw = IntegerArgumentType.getInteger(ctx, "hearts/corruption levels");
 
                                 if (data.isImmortal()) {
-                                    int currentCorruption = data.getCorruption();
-                                    int maxWithdraw = 3 + currentCorruption;
+                                    int maxWithdraw = 0;
+                                    for (int i = data.getCorruption(); i > -4; i--) {
+                                        maxWithdraw += Utils.nextShardCost(i);
+                                    }
+
                                     if (amntToWithdraw > maxWithdraw) {
                                         player.sendMessage(
                                                 Text.literal("Invalid number of corruption levels to withdraw."),
@@ -381,22 +374,19 @@ public class Mortals {
                                     } else {
                                         int numShards = 0;
                                         int numPurifiers = 0;
-                                        for (int i = 0; i < amntToWithdraw; i++) {
-                                            int newCorruption = currentCorruption - i;
-                                            if (newCorruption > 0) {
-                                                // Award soul shards for positive levels
-                                                if (newCorruption == 3) {
-                                                    numShards += 3;
-                                                } else if (newCorruption == 2) {
-                                                    numShards += 2;
-                                                } else {
-                                                    numShards += 1;
-                                                }
-                                            } else {
-                                                // Award soul purifiers for negative levels
-                                                numPurifiers += 1;
-                                            }
+
+                                        while (data.getCorruption() > 0 && amntToWithdraw > 0) {
+                                            numShards += Utils.nextShardCost(data.getCorruption() - 1);
+                                            data.setCorruption(data.getCorruption() - 1);
+                                            amntToWithdraw -= 1;
                                         }
+
+                                        while (data.getCorruption() <= 0 && amntToWithdraw > 0) {
+                                            numPurifiers += 1;
+                                            data.setCorruption(data.getCorruption() - 1);
+                                            amntToWithdraw -= 1;
+                                        }
+
                                         if (numShards > 0) {
                                             ItemStack soulShards = new ItemStack(ModItems.SOUL_SHARD, numShards);
                                             if (!player.getInventory().insertStack(soulShards)) {
@@ -409,7 +399,6 @@ public class Mortals {
                                                 player.dropItem(purifiers, false);
                                             }
                                         }
-                                        data.setCorruption(currentCorruption - amntToWithdraw);
                                         player.sendMessage(Text.literal(
                                                 "Withdrew " + amntToWithdraw + " corruption level(s) and received "
                                                         + (numShards > 0 ? numShards + " soul shard(s)" : "")
@@ -419,50 +408,48 @@ public class Mortals {
                                                 false);
                                         return 1;
                                     }
-                                }
+                                } else {
+                                    double currentHealth = player.getHealth();
+                                    double maxHealth = player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                                            .getBaseValue();
 
-                                double currentHealth = player.getHealth();
-                                double maxHealth = player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
-                                        .getBaseValue();
-
-                                if (amntToWithdraw < 1 || maxHealth - (amntToWithdraw * 2) < 1) {
-                                    player.sendMessage(Text.literal("Invalid amount of hearts to withdraw."), false);
-                                    return 0;
-                                }
-                                double totalHpToWithdraw = amntToWithdraw * 2;
-
-                                // Calculate regular and artificial hearts
-                                int currentHearts = (int) (maxHealth / 2);
-                                int minHearts = 7;
-                                int regularHearts = Math.max(0, currentHearts - minHearts);
-                                int regularToGive = Math.min(amntToWithdraw, regularHearts);
-                                int artificialToGive = amntToWithdraw - regularToGive;
-
-                                // Reduce player's max health
-                                player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
-                                        .setBaseValue(maxHealth - totalHpToWithdraw);
-                                player.setHealth((float) Math.min(currentHealth, maxHealth - totalHpToWithdraw));
-
-                                // Give the player hearts
-                                if (regularToGive > 0) {
-                                    ItemStack heartShard = new ItemStack(ModItems.HEART, regularToGive);
-                                    if (!player.getInventory().insertStack(heartShard)) {
-                                        player.dropItem(heartShard, false);
+                                    if (amntToWithdraw < 1 || maxHealth - (amntToWithdraw * 2) < 1) {
+                                        player.sendMessage(Text.literal("Invalid amount of hearts to withdraw."),
+                                                false);
+                                        return 0;
                                     }
-                                }
-                                if (artificialToGive > 0) {
-                                    ItemStack artificialHeart = new ItemStack(ModItems.ARTIFICIAL_HEART,
-                                            artificialToGive);
-                                    if (!player.getInventory().insertStack(artificialHeart)) {
-                                        player.dropItem(artificialHeart, false);
+                                    double totalHpToWithdraw = amntToWithdraw * 2;
+
+                                    int currentHearts = (int) (maxHealth / 2);
+                                    int minHearts = 7;
+                                    int regularHearts = Math.max(0, currentHearts - minHearts);
+                                    int regularToGive = Math.min(amntToWithdraw, regularHearts);
+                                    int artificialToGive = amntToWithdraw - regularToGive;
+
+                                    player.getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                                            .setBaseValue(maxHealth - totalHpToWithdraw);
+                                    player.setHealth((float) Math.min(currentHealth, maxHealth - totalHpToWithdraw));
+
+                                    if (regularToGive > 0) {
+                                        ItemStack heartShard = new ItemStack(ModItems.HEART, regularToGive);
+                                        if (!player.getInventory().insertStack(heartShard)) {
+                                            player.dropItem(heartShard, false);
+                                        }
                                     }
+                                    if (artificialToGive > 0) {
+                                        ItemStack artificialHeart = new ItemStack(ModItems.ARTIFICIAL_HEART,
+                                                artificialToGive);
+                                        if (!player.getInventory().insertStack(artificialHeart)) {
+                                            player.dropItem(artificialHeart, false);
+                                        }
+                                    }
+                                    player.sendMessage(Text.literal("Withdrew " + amntToWithdraw + " hearts (" +
+                                            (regularToGive > 0 ? regularToGive + " regular" : "") +
+                                            (regularToGive > 0 && artificialToGive > 0 ? ", " : "") +
+                                            (artificialToGive > 0 ? artificialToGive + " artificial" : "") +
+                                            ")."), false);
+                                    return 1;
                                 }
-                                player.sendMessage(Text.literal("Withdrew " + amntToWithdraw + " hearts (" +
-                                        (regularToGive > 0 ? regularToGive + " regular" : "") +
-                                        (regularToGive > 0 && artificialToGive > 0 ? ", " : "") +
-                                        (artificialToGive > 0 ? artificialToGive + " artificial" : "") +
-                                        ")."), false);
-                                return 1;
                             })));
             // Debug command to set ascendance state
             dispatcher.register(CommandManager.literal("setAscendance")
@@ -558,6 +545,18 @@ public class Mortals {
                                                 player.getY() + 5, player.getZ(), itemId, 2.0f, 250);
                                         Utils.sendPayloadToNearby(player, payload);
                                         player.sendMessage(Text.literal("§aRendered item: " + itemId), false);
+                                        return 1;
+                                    })))
+                    .then(CommandManager.literal("ghost")
+                            .then(CommandManager
+                                    .argument("duration", IntegerArgumentType.integer(1, 600))
+                                    .executes(ctx -> {
+                                        ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                        NetworkChannels.GhostS2CPayload payload = new NetworkChannels.GhostS2CPayload(
+                                                (float) player.getX(), (float) player.getY(), (float) player.getZ(),
+                                                IntegerArgumentType.getInteger(ctx, "duration"));
+                                        Utils.sendPayloadToNearby(player, payload);
+                                        player.sendMessage(Text.literal("ghost rendered"), false);
                                         return 1;
                                     }))));
         });

@@ -4,7 +4,11 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.util.Identifier;
 
 import com.immortals.api.TaskScheduler;
 import com.immortals.Immortal.Immortals;
@@ -20,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Main implements ModInitializer {
+
 	public static final String MOD_ID = "immortals";
 
 	// This logger is used to write text to the console and the log file.
@@ -45,12 +50,17 @@ public class Main implements ModInitializer {
 			api = TickRateAPI.getInstance();
 		});
 
-		// Register the custom payloads
+		// Server to client
 		PayloadTypeRegistry.playS2C().register(NetworkChannels.RuneS2CPayload.ID, NetworkChannels.RuneS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(NetworkChannels.SphereS2CPayload.ID,
 				NetworkChannels.SphereS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(NetworkChannels.ItemS2CPayload.ID,
 				NetworkChannels.ItemS2CPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(NetworkChannels.SpellHudS2CPayload.ID,
+				NetworkChannels.SpellHudS2CPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(NetworkChannels.GhostS2CPayload.ID,
+				NetworkChannels.GhostS2CPayload.CODEC);
+		// Client to server
 		PayloadTypeRegistry.playC2S().register(NetworkChannels.SpellC2SPayload.ID,
 				NetworkChannels.SpellC2SPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(NetworkChannels.FragmentC2SPayload.ID,
@@ -61,9 +71,8 @@ public class Main implements ModInitializer {
 			scheduler.tick(server.getTicks());
 		});
 
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
+		Identifier glassSoundId = Identifier.of(MOD_ID, "glass");
+		Registry.register(Registries.SOUND_EVENT, glassSoundId, SoundEvent.of(glassSoundId));
 		ModItems.registerModItems();
 		Immortals.register();
 		Mortals.register();

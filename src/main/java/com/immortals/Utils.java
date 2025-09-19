@@ -1,7 +1,7 @@
 package com.immortals;
 
-import net.minecraft.entity.LightningEntity;
 import net.minecraft.entity.SpawnReason;
+import com.immortals.network.NetworkChannels;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageType;
@@ -9,6 +9,7 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -17,12 +18,11 @@ import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.BlockStateRaycastContext;
-import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.component.type.AttributeModifierSlot;
 import net.minecraft.component.type.AttributeModifiersComponent;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.advancement.AdvancementProgress;
@@ -34,6 +34,7 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 
+import com.immortals.Immortal.Spell;
 import com.immortals.Immortal.SpellRegistry;
 import com.immortals.api.ImmortalsData;
 import com.immortals.network.NetworkChannels;
@@ -43,13 +44,17 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Map.Entry;
 
-import net.minecraft.entity.EntityType;
+import org.jetbrains.annotations.Nullable;
+
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.Entity;
 
 public class Utils {
 
+    // Custom damage type for spells, bypasses armor
     public static final RegistryKey<DamageType> SPELL_DAMAGE_TYPE = RegistryKey.of(RegistryKeys.DAMAGE_TYPE,
             Identifier.of("immortals", "spell"));
 
@@ -84,16 +89,17 @@ public class Utils {
             case DASH, GLOW -> 1;
             case BLACKOUT, FROSTBITE -> 2;
             case PERSIST, SPLINTER_BLOW -> 3;
-            case GAMBLE, WAVE -> 4;
-            case FRAGMENT, BEAM -> 5;
+            case LINK, WAVE -> 4;
+            case FRAGMENT, LOCK -> 5;
             default -> 0;
         };
     }
 
+    // Apply passive corruption effects based on level
     public static void applyCorruptionEffects(ServerPlayerEntity player) {
         ImmortalsData data = (ImmortalsData) player;
         int level = data.getCorruption();
-        int duration = 60; // 3 seconds (60 ticks)
+        int duration = 60; // 3 seconds, refreshed every second
 
         if (level <= -2) {
             // -2: Slowness I
@@ -135,22 +141,23 @@ public class Utils {
         }
     }
 
+    // Array of spells by corruption level
     public static String[][] spellsByCorr = {
             { "dash", "glow" },
             { "frostbite", "blackout" },
             { "persist", "splinter_blow" },
-            { "gamble", "wave" },
-            { "fragment", "beam" }
+            { "link", "wave" },
+            { "fragment", "lock" }
     };
 
+    // Returns a formatted text listing the spells unlocked for a given corruption
+    // level, honestly I put extra cases that aren't necessary
     public static Text getSpellDescriptions(int corr) {
         // Check if the corruption level is valid
         if (corr < 1 || corr > spellsByCorr.length) {
             return Text.literal("No spells unlocked at this level.");
         }
 
-        // Get the spells for the given corruption level (subtract 1 since array is
-        // 0-indexed)
         String[] spells = spellsByCorr[corr - 1];
 
         // If no spells at this level
@@ -168,7 +175,7 @@ public class Utils {
             MutableText spellText = Text.literal(spellName)
                     .styled(style -> style.withHoverEvent(
                             new HoverEvent.ShowText(Text.literal(spell.getDescription())))
-                            .withColor(0xFF0000)); // Red color
+                            .withColor(0xFFAA00)); // Gold color
 
             return message.append(spellText).append("! Hover to see details!");
 
@@ -222,8 +229,47 @@ public class Utils {
         }
     }
 
+    public static int currentCooldown(ServerPlayerEntity player, SpellRegistry spell) {
+        Map<SpellRegistry, Integer> spellEntry = Spell.pendingCooldownNotifications.getOrDefault(player.getUuid(),
+                null);
+        if (spellEntry == null)
+            return 0;
+        Integer currCooldown = spellEntry.get(spell);
+        if (currCooldown == null || currCooldown == -1)
+            return 0;
+        return currCooldown;
+    }
+
+    public static String currentSpellState(ServerPlayerEntity player, SpellRegistry spell) {
+        // Check if the spell is currently active
+        Map<SpellRegistry, Integer> spellEntry = Spell.pendingCooldownNotifications.getOrDefault(player, null);
+        if (spellEntry == null)
+            return "ready";
+        Integer currCooldown = spellEntry.get(spell);
+        if (currCooldown == -1)
+            return "in_use";
+        return "cooldown";
+    }
+
+    /*
+     * Sends spell info to player for HUD display
+     * Updated when:
+     * 1) Player changes hotbar slots
+     * 2) Player casts a spell (currently active)
+     * 3) Spell ends (cooldown starts)
+     * 4) Spell cooldown ends (ready again)
+     */
+    public static void sendSpellInfoToPlayer(ServerPlayerEntity player, @Nullable String spellId,
+            String state, int remainingTicks, int maxTicks) {
+        NetworkChannels.SpellHudS2CPayload payload = new NetworkChannels.SpellHudS2CPayload(
+                spellId == null ? "empty" : spellId, state, remainingTicks, maxTicks);
+
+        ServerPlayNetworking.send(player, payload);
+    }
+
+    // Check if the player's inventory has at least one of the given item, and
+    // return the slot index or -1 if not found
     public static Integer inventoryHas(ServerPlayerEntity player, Item item) {
-        // offhand and armor slots are 0-7
         int size = player.getInventory().size();
         for (int i = 0; i < size; i++) {
             ItemStack stack = player.getInventory().getStack(i);
@@ -231,31 +277,11 @@ public class Utils {
                 return i;
             }
         }
-        return null;
+        return -1;
     }
 
-    public static boolean canSee(ServerPlayerEntity user, ServerPlayerEntity other) {
-        // Check if the user is within 15 blocks of the other player
-        if (user.squaredDistanceTo(other) > 15 * 15) {
-            return false;
-        }
-
-        // Check if the user is looking at the other player
-        Vec3d userLook = user.getRotationVec(1.0f).normalize();
-        Vec3d directionToOther = other.getPos().subtract(user.getPos()).normalize();
-        double dotProduct = userLook.dotProduct(directionToOther);
-        if (dotProduct < Math.cos(Math.toRadians(30))) { // 30 degrees threshold
-            return false;
-        }
-
-        // Check if there are no blocks between the user and the other player
-        Vec3d userEyePos = user.getEyePos();
-        Vec3d otherEyePos = other.getEyePos();
-        return user.getWorld().raycast(new RaycastContext(
-                userEyePos, otherEyePos, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, user))
-                .getType() == net.minecraft.util.hit.HitResult.Type.MISS;
-    }
-
+    // Animation for augmenting an item, renders the two items that merge to make
+    // the new one
     public static void augmentationAnimation(ItemStack copy, Item item, ServerPlayerEntity player) {
         if (!(player.getWorld() instanceof ServerWorld serverWorld))
             return;
@@ -324,35 +350,18 @@ public class Utils {
                 ((ItemEntity) summonedItem).setStack(copy);
                 serverWorld.spawnEntity(summonedItem);
                 // Add a burst of particles to highlight the new item
-                serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.HAPPY_VILLAGER,
+                serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK,
                         eyePos.x, eyePos.y, eyePos.z, 20, 0.2, 0.2, 0.2, 0.2);
             }
         }, animDuration);
     }
 
-    // Sends a client payload to all players nearby the given player
+    // Sends a client payload to all players nearby including the player
     public static void sendPayloadToNearby(ServerPlayerEntity player, CustomPayload payload) {
         ServerPlayNetworking.send(player, payload);
         for (ServerPlayerEntity p : PlayerLookup
                 .tracking(player)) {
             ServerPlayNetworking.send(p, payload);
-        }
-    }
-
-    // Dragon ascent breath particles at pos
-    public static void drawDragonAscent(Vec3d pos, World world) {
-        if (!(world instanceof ServerWorld serverWorld))
-            return;
-        double y = pos.y;
-        int particleCount = 100; // Number of particles to spawn
-        double radius = 30.0;
-        for (int i = 0; i < particleCount; i++) {
-            double angle = Math.random() * 2 * Math.PI;
-            double dist = Math.sqrt(Math.random()) * radius; // Uniform distribution in circle
-            double x = pos.x + Math.cos(angle) * dist;
-            double z = pos.z + Math.sin(angle) * dist;
-            double py = y + (Math.random() - 0.5) * 2; // Small vertical variation
-            serverWorld.spawnParticles(ParticleTypes.PORTAL, x, py, z, 1, 0, 0, 0, 0);
         }
     }
 
@@ -373,67 +382,6 @@ public class Utils {
                 double z = pos.z + radius * Math.sin(angle);
                 serverWorld.spawnParticles(ParticleTypes.CRIMSON_SPORE, x, ringY, z, 1, 0, 0, 0, 0);
             }
-        }
-    }
-
-    // Strikes visual-only lightning at a given position
-    public static void strikeLightning(ServerWorld world, Vec3d position) {
-        LightningEntity lightningBolt = EntityType.LIGHTNING_BOLT.create(
-                world,
-                entity -> {
-                }, // No-op consumer
-                new BlockPos((int) position.x, (int) position.y, (int) position.z),
-                SpawnReason.TRIGGERED,
-                true,
-                true);
-        if (lightningBolt != null) {
-            lightningBolt.setCosmetic(true); // Mark the lightning as cosmetic to prevent damage
-            world.spawnEntity(lightningBolt);
-        }
-    }
-
-    // Timeslow dynamic clock particles
-    public static void drawTimeslow(Vec3d pos, ServerWorld world, double radius, int particles, double handAngle) {
-        // Draw the circle
-        for (int i = 0; i < particles; i++) {
-            double angle = 2 * Math.PI * i / particles;
-            double x = pos.x + radius * Math.cos(angle);
-            double z = pos.z + radius * Math.sin(angle);
-            double y = pos.y + 0.1;
-            world.spawnParticles(ParticleTypes.ELECTRIC_SPARK, x, y, z, 1, 0, 0, 0, 0f);
-        }
-
-        // Draw 8 clock lines (static)
-        int clockLines = 8;
-        double lineLength = radius * 0.9;
-        for (int i = 0; i < clockLines; i++) {
-            double angle = 2 * Math.PI * i / clockLines;
-            double x1 = pos.x + (radius - 0.2) * Math.cos(angle);
-            double z1 = pos.z + (radius - 0.2) * Math.sin(angle);
-            double x2 = pos.x + lineLength * Math.cos(angle);
-            double z2 = pos.z + lineLength * Math.sin(angle);
-            double y = pos.y + 0.1;
-            // Draw a line from x1,z1 to x2,z2 (5 particles)
-            for (int j = 0; j <= 5; j++) {
-                double frac = j / 5.0;
-                double px = x1 + (x2 - x1) * frac;
-                double pz = z1 + (z2 - z1) * frac;
-                world.spawnParticles(ParticleTypes.ELECTRIC_SPARK, px, y, pz, 1, 0, 0, 0, 0f);
-            }
-        }
-
-        // Draw the moving minute hand
-        double hx1 = pos.x;
-        double hz1 = pos.z;
-        double hx2 = pos.x + (radius - 0.3) * Math.cos(handAngle);
-        double hz2 = pos.z + (radius - 0.3) * Math.sin(handAngle);
-        double hy = pos.y + 0.12;
-        // Draw the hand as a line
-        for (int j = 0; j <= 10; j++) {
-            double frac = j / 10.0;
-            double px = hx1 + (hx2 - hx1) * frac;
-            double pz = hz1 + (hz2 - hz1) * frac;
-            world.spawnParticles(ParticleTypes.GLOW, px, hy, pz, 1, 0, 0, 0, 0f);
         }
     }
 
@@ -529,5 +477,4 @@ public class Utils {
             e.printStackTrace();
         }
     }
-
 }

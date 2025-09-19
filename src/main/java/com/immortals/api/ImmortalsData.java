@@ -31,15 +31,10 @@ public interface ImmortalsData {
 
     void setOnHitSpell(String spellId);
 
-    // Shrink active: boolean true if shrink is active. Necessary for extra damage
-    boolean isShrinkActive();
+    // Link: UUID
+    UUID getLinked();
 
-    void setShrinkActive(boolean active);
-
-    // Last spell: stores id of last spell cast
-    String getLastSpell();
-
-    void setLastSpell(String spellId);
+    void setLinked(UUID uuid);
 
     // Combo count on target: [UUID, combo count, last hit time]
     Map<UUID, Pair<Integer, Long>> getComboCounts();

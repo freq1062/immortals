@@ -10,6 +10,7 @@ import net.minecraft.network.packet.s2c.play.EntityEquipmentUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import com.mojang.datafixers.util.Pair;
 
+// Grants a player true invisibility, even with armor on. Used for the Chronoreaver.
 public class EquipmentVisibility {
     /**
      * Tell every other client that this player has no armor or items
