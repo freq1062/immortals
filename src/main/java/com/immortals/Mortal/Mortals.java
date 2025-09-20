@@ -53,10 +53,15 @@ public class Mortals {
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
                 if (!((ImmortalsData) player).isImmortal()) {
                     player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                            net.minecraft.entity.effect.StatusEffects.HERO_OF_THE_VILLAGE, 60, 2, false, false)); // Hero
-                                                                                                                  // of
-                                                                                                                  // the
-                    // Village III
+                            net.minecraft.entity.effect.StatusEffects.HERO_OF_THE_VILLAGE, 60, 2, false, false));
+                    // Hero of the village 3
+
+                    // Add Luck 1 if the player has >= 11 hearts
+                    double maxHealth = player.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue();
+                    if (maxHealth >= 22.0) {
+                        player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                                net.minecraft.entity.effect.StatusEffects.LUCK, 60, 0, false, false));
+                    }
                 }
             }
 
@@ -473,6 +478,9 @@ public class Mortals {
                                             return 0;
                                         }
                                         data.setImmortal(newState);
+                                        targetPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                                                .setBaseValue(20.0);
+                                        ;
                                         Utils.sendSpellInfoToPlayer(targetPlayer, null, "", 0, 0);
                                         // Reset spell bindings
                                         for (int slot = 0; slot < 9; slot++) {

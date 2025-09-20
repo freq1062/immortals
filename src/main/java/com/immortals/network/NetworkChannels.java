@@ -21,11 +21,15 @@ public final class NetworkChannels {
                                 NetworkChannels.SpellHudS2CPayload.CODEC);
                 PayloadTypeRegistry.playS2C().register(NetworkChannels.GhostS2CPayload.ID,
                                 NetworkChannels.GhostS2CPayload.CODEC);
+                PayloadTypeRegistry.playS2C().register(NetworkChannels.HandshakeS2CPayload.ID,
+                                NetworkChannels.HandshakeS2CPayload.CODEC);
                 // Client to server
                 PayloadTypeRegistry.playC2S().register(NetworkChannels.SpellC2SPayload.ID,
                                 NetworkChannels.SpellC2SPayload.CODEC);
                 PayloadTypeRegistry.playC2S().register(NetworkChannels.FragmentC2SPayload.ID,
                                 NetworkChannels.FragmentC2SPayload.CODEC);
+                PayloadTypeRegistry.playC2S().register(NetworkChannels.HandshakeC2SPayload.ID,
+                                NetworkChannels.HandshakeC2SPayload.CODEC);
         }
 
         // Runes
@@ -153,6 +157,37 @@ public final class NetworkChannels {
                 public static final PacketCodec<RegistryByteBuf, SpellC2SPayload> CODEC = PacketCodec.tuple(
                                 PacketCodecs.INTEGER, SpellC2SPayload::slot,
                                 SpellC2SPayload::new);
+
+                @Override
+                public Id<? extends CustomPayload> getId() {
+                        return ID;
+                }
+        }
+
+        // Handshake
+        public record HandshakeS2CPayload(int dummy) implements CustomPayload {
+                public static final Identifier HANDSHAKE_PAYLOAD_ID = Identifier
+                                .of("immortals", "serverhandshake");
+                public static final CustomPayload.Id<HandshakeS2CPayload> ID = new CustomPayload.Id<>(
+                                HANDSHAKE_PAYLOAD_ID);
+                public static final PacketCodec<RegistryByteBuf, HandshakeS2CPayload> CODEC = PacketCodec.tuple(
+                                PacketCodecs.INTEGER, HandshakeS2CPayload::dummy,
+                                HandshakeS2CPayload::new);
+
+                @Override
+                public Id<? extends CustomPayload> getId() {
+                        return ID;
+                }
+        }
+
+        public record HandshakeC2SPayload(int dummy) implements CustomPayload {
+                public static final Identifier HANDSHAKE_PAYLOAD_ID = Identifier
+                                .of("immortals", "clienthandshake");
+                public static final CustomPayload.Id<HandshakeC2SPayload> ID = new CustomPayload.Id<>(
+                                HANDSHAKE_PAYLOAD_ID);
+                public static final PacketCodec<RegistryByteBuf, HandshakeC2SPayload> CODEC = PacketCodec.tuple(
+                                PacketCodecs.INTEGER, HandshakeC2SPayload::dummy,
+                                HandshakeC2SPayload::new);
 
                 @Override
                 public Id<? extends CustomPayload> getId() {

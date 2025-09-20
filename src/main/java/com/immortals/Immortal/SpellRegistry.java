@@ -47,7 +47,7 @@ public enum SpellRegistry {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             Vec3d dir = user.getRotationVec(1.0F).normalize();
-            user.setVelocity(dir.x * 1.25, dir.y * 1.25, dir.z * 1.25);
+            user.setVelocity(dir.x * 1.75, dir.y * 1.5, dir.z * 1.75);
             user.velocityModified = true;
 
             ServerWorld world = (ServerWorld) user.getWorld();
@@ -422,7 +422,7 @@ public enum SpellRegistry {
 
                 Main.scheduler.schedule(() -> {
                     // Calculate positions for the ring of radius i
-                    int particlesPerRing = (int) (radius * 20); // More particles for larger radius
+                    int particlesPerRing = (int) (radius * 10); // More particles for larger radius
                     for (int j = 0; j < particlesPerRing; j++) {
                         double angle = 2 * Math.PI * j / particlesPerRing;
                         double x = center.x + radius * Math.cos(angle);
@@ -432,8 +432,8 @@ public enum SpellRegistry {
                                                    // ground
                                                    // level
 
-                        world.spawnParticles(ParticleTypes.SPLASH, x, y, z, 10, 0, 0, 0, 0.2); // Reduced particle
-                                                                                               // effect to minimize lag
+                        DustParticleEffect effect = new DustParticleEffect(0x0000FF, 2f); // blue
+                        world.spawnParticles(effect, x, y, z, 1, 0, 0, 0, 0.01);
                     }
                     // Remove cobwebs within the radius
                     BlockPos.stream(BlockPos.ofFloored(center.subtract(radius, radius, radius)),
@@ -455,7 +455,7 @@ public enum SpellRegistry {
                             double x = center.x + Math.cos(randomAngle) * randomRadius;
                             double z = center.z + Math.sin(randomAngle) * randomRadius;
                             double y = center.y + 0.1;
-                            world.spawnParticles(ParticleTypes.SPLASH, x, y, z, 25, 0, 0, 0, 0.01);
+                            world.spawnParticles(ParticleTypes.SPLASH, x, y, z, 5, 0, 0, 0, 0.01);
                         }
                         BlockPos.stream(BlockPos.ofFloored(center.subtract(maxRadius, maxRadius, maxRadius)),
                                 BlockPos.ofFloored(center.add(maxRadius, maxRadius, maxRadius)))

@@ -196,7 +196,6 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
     public void setImmortal(boolean immortal) {
         is_immortal = immortal;
         setCorruption(0);
-        ((ServerPlayerEntity) (Object) this).setHealth(20.0F);
     }
 
     @Override

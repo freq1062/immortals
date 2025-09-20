@@ -53,6 +53,7 @@ public class Immortals {
     public static final java.util.Map<ServerPlayerEntity, Integer> size = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static void register() {
+        Main.LOGGER.info("Registering Immortals events");
 
         // Register spell activation from keybind
         ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.SpellC2SPayload.ID, (payload, context) -> {
@@ -76,6 +77,12 @@ public class Immortals {
                 }
             }
 
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.HandshakeC2SPayload.ID, (payload, context) -> {
+            // Send handshake packet to validate client rendering
+            NetworkChannels.HandshakeS2CPayload response = new NetworkChannels.HandshakeS2CPayload(0);
+            ServerPlayNetworking.send(context.player(), response);
         });
 
         // Register fragment activation from punching
@@ -207,30 +214,22 @@ public class Immortals {
                     }
                 }
 
-                // Grant Haste II block break speed if player has Timekeeper and is immortal
-                EntityAttributeInstance blockBreakAttr = player
-                        .getAttributeInstance(EntityAttributes.BLOCK_BREAK_SPEED);
-                double baseBreakAttr = 1.0; // Default base value
+                // Grant Haste II effect if player has Timekeeper and is immortal
                 if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1) {
-                    // Only increase if not already increased
-                    if (blockBreakAttr != null && blockBreakAttr.getValue() <= baseBreakAttr) {
-                        if (((ImmortalsData) player).isImmortal()) {
-                            MutableText message = Text.literal("Unlocked ");
-                            MutableText spellText = Text.literal("Timeslow")
-                                    .styled(style -> style.withHoverEvent(
-                                            new HoverEvent.ShowText(
-                                                    Text.literal(SpellRegistry.TIMESLOW.getDescription())))
-                                            .withColor(0xFFD700)); // Gold color
+                    if (((ImmortalsData) player).isImmortal()) {
+                        MutableText message = Text.literal("Unlocked ");
+                        MutableText spellText = Text.literal("Timeslow")
+                                .styled(style -> style.withHoverEvent(
+                                        new HoverEvent.ShowText(
+                                                Text.literal(SpellRegistry.TIMESLOW.getDescription())))
+                                        .withColor(0xFFD700)); // Gold color
 
-                            player.sendMessage(message.append(spellText)
-                                    .append(" and gained +1 block break speed! Hover to see details!"));
-                        }
-                        blockBreakAttr.setBaseValue(baseBreakAttr + 1.0);
-                    }
-                } else {
-                    // Only decrease if currently increased
-                    if (blockBreakAttr != null && blockBreakAttr.getValue() > baseBreakAttr) {
-                        blockBreakAttr.setBaseValue(baseBreakAttr);
+                        player.sendMessage(message.append(spellText)
+                                .append(" and gained Haste II! Hover to see details!"));
+
+                        // Apply Haste II effect for 2 seconds
+                        player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                                net.minecraft.entity.effect.StatusEffects.HASTE, 40, 1));
                     }
                 }
 
@@ -394,6 +393,10 @@ public class Immortals {
             if (!oldPlayer.getWorld().getRegistryKey().equals(newPlayer.getWorld().getRegistryKey())) {
                 return;
             }
+
+            // Send handshake packet to validate client rendering
+            NetworkChannels.HandshakeS2CPayload payload = new NetworkChannels.HandshakeS2CPayload(0);
+            ServerPlayNetworking.send(newPlayer, payload);
 
             // Make sure tick rate is reset
             ImmortalsData newPlayerData = (ImmortalsData) newPlayer;

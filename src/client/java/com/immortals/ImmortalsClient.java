@@ -66,10 +66,11 @@ public class ImmortalsClient implements ClientModInitializer {
     // Array to keep track of the last activation time
     private static long[] lastActivationTime = { 0 };
 
+    public static boolean validated = false;
+
     @Override
     public void onInitializeClient() {
         TickRateClientManager.serverHasMod();
-        NetworkChannels.register();
         // Register fragment entity renderers
         EntityRendererRegistry.register(ImmortalEntity.FRAGMENT_ENTITY, FragmentEntityRenderer::new);
 
@@ -85,6 +86,14 @@ public class ImmortalsClient implements ClientModInitializer {
                     Identifier.of("minecraft", "textures/missing_texture.png"));
             pendingObjects.add(new RuneData(tex, payload.x(), payload.y(), payload.z(),
                     payload.maxSize(), payload.lifetimeTicks(), 0));
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(NetworkChannels.HandshakeS2CPayload.ID, (payload, context) -> {
+            ClientWorld world = context.client().world;
+            if (world == null) {
+                return;
+            }
+            validated = true;
         });
 
         ClientPlayNetworking.registerGlobalReceiver(NetworkChannels.SphereS2CPayload.ID, (payload, context) -> {
@@ -146,7 +155,7 @@ public class ImmortalsClient implements ClientModInitializer {
         // Render pending objects every frame
         WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             if (MinecraftClient.getInstance().player == null
-                    || MinecraftClient.getInstance().getNetworkHandler() == null) {
+                    || MinecraftClient.getInstance().getNetworkHandler() == null || !validated) {
                 return;
             }
             if (pendingObjects.isEmpty())
@@ -211,8 +220,17 @@ public class ImmortalsClient implements ClientModInitializer {
         // Decrement lifetimes every tick and remove expired objects
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null || client.getNetworkHandler() == null) {
+                validated = false;
                 return;
             }
+
+            if (client.player.age % 60 == 0) {
+                validated = false;
+                // Send handshake to server
+                NetworkChannels.HandshakeC2SPayload payload = new NetworkChannels.HandshakeC2SPayload(0);
+                ClientPlayNetworking.send(payload);
+            }
+
             // Handle spell key press/release
             if (!SPELL_KEY.isPressed() && SPELL_KEY.wasPressed()) {
                 if (client.player == null || client.getNetworkHandler() == null) {

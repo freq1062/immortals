@@ -1,5 +1,6 @@
 package com.immortals.hud;
 
+import com.immortals.ImmortalsClient;
 import com.immortals.Immortal.SpellRegistry;
 
 import net.minecraft.client.MinecraftClient;
@@ -29,8 +30,10 @@ public final class SpellHudClient {
         }
     }
 
-    // render called from HudRenderCallback
+    // render called from HudElementRegistry
     public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
+        if (!ImmortalsClient.validated)
+            return; // only render if validated by server
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null)
             return;
@@ -59,8 +62,6 @@ public final class SpellHudClient {
             }
             case "cooldown" -> {
                 if (maxTicks > 0) {
-                    if (remainingTicks % 20 == 0)
-                        System.out.println(remainingTicks + "/" + maxTicks);
                     float progress = 1.0f - (float) remainingTicks / (float) maxTicks;
                     fillW = (int) (barWidth * progress); // percentage filled based on elapsed cooldown
                 }

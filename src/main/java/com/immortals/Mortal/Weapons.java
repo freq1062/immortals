@@ -345,10 +345,9 @@ public class Weapons {
                         player.sendMessage(
                                 Text.literal("§cPhasebreaker transformed back into the Dragon Egg!"),
                                 true);
-                    } else {
-                        found = Utils.inventoryHas(player, ModItems.CHRONOREAVER);
-                        if (found == -1)
-                            return;
+                    }
+                    found = Utils.inventoryHas(player, ModItems.CHRONOREAVER);
+                    if (found != -1) {
                         inv.setStack(found, new ItemStack(ModItems.TIMEKEEPER));
                         player.sendMessage(
                                 Text.literal("§cChronoreaver transformed back into the Timekeeper!"),
