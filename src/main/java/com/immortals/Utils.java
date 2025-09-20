@@ -9,7 +9,6 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -22,7 +21,6 @@ import net.minecraft.world.World;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.component.type.AttributeModifierSlot;
 import net.minecraft.component.type.AttributeModifiersComponent;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.advancement.AdvancementProgress;
@@ -37,7 +35,6 @@ import net.minecraft.util.Identifier;
 import com.immortals.Immortal.Spell;
 import com.immortals.Immortal.SpellRegistry;
 import com.immortals.api.ImmortalsData;
-import com.immortals.network.NetworkChannels;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -45,7 +42,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.Map.Entry;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -242,13 +238,14 @@ public class Utils {
 
     public static String currentSpellState(ServerPlayerEntity player, SpellRegistry spell) {
         // Check if the spell is currently active
-        Map<SpellRegistry, Integer> spellEntry = Spell.pendingCooldownNotifications.getOrDefault(player, null);
+        Map<SpellRegistry, Integer> spellEntry = Spell.pendingCooldownNotifications.getOrDefault(player.getUuid(),
+                null);
         if (spellEntry == null)
             return "ready";
         Integer currCooldown = spellEntry.get(spell);
-        if (currCooldown == -1)
+        if (currCooldown != null && currCooldown == -1)
             return "in_use";
-        return "cooldown";
+        return currCooldown == null ? "ready" : "cooldown";
     }
 
     /*

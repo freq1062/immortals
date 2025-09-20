@@ -9,33 +9,29 @@ import net.minecraft.client.render.RenderTickCounter;
 public final class SpellHudClient {
     private static volatile String currentSpellId = null;
     private static volatile String currentState = "ready"; // "ready","in_use","cooldown"
-    private static volatile int remainingTicks = 0;
+    private static volatile int elapsedTicks = 0; // Renamed to reflect ticks passed
     private static volatile int maxTicks = 0;
 
-    public static void displaySpell(String spellId, String state, int remaining, int max) {
+    public static void displaySpell(String spellId, String state, int elapsed, int max) {
         currentSpellId = spellId;
         currentState = state;
-        remainingTicks = remaining;
+        elapsedTicks = elapsed;
         maxTicks = max;
     }
 
     public static void clearDisplayedSpell() {
         currentSpellId = null;
         currentState = "ready";
-        remainingTicks = 0;
+        elapsedTicks = 0;
         maxTicks = 0;
     }
 
     // call this each client tick (register via ClientTickEvents.END_CLIENT_TICK)
     public static void tick(MinecraftClient client) {
-        // optionally check if player changed slot client-side and ask server for
-        // immediate update,
-        // but per your design server already pushes on slot-change so you may not need
-        // this.
         // Local countdown smoothing:
-        if (currentSpellId != null && "cooldown".equals(currentState) && remainingTicks > 0) {
-            remainingTicks = Math.max(0, remainingTicks - 1);
-            if (remainingTicks == 0)
+        if (currentSpellId != null && "cooldown".equals(currentState) && elapsedTicks < maxTicks) {
+            elapsedTicks = Math.min(maxTicks, elapsedTicks + 1);
+            if (elapsedTicks == maxTicks)
                 currentState = "ready";
         }
     }
@@ -51,8 +47,8 @@ public final class SpellHudClient {
         int screenWidth = client.getWindow().getScaledWidth();
         int screenHeight = client.getWindow().getScaledHeight();
 
-        int barWidth = 60;
-        int barHeight = 10;
+        int barWidth = 40;
+        int barHeight = 5;
         int x = screenWidth / 2 + 95; // right of hotbar
         int y = screenHeight - 40;
 
@@ -69,10 +65,9 @@ public final class SpellHudClient {
                 color = 0xFFFF0000; // red
             }
             case "cooldown" -> {
-                System.out.println("Cooldown: " + remainingTicks);
                 if (maxTicks > 0) {
-                    float progress = (float) remainingTicks / (float) maxTicks;
-                    fillW = (int) (barWidth * (progress)); // percentage filled based on cooldown
+                    float progress = (float) elapsedTicks / (float) maxTicks;
+                    fillW = (int) (barWidth * progress); // percentage filled based on elapsed ticks
                 }
                 color = 0xFFFFFF00; // yellow
             }
@@ -88,6 +83,6 @@ public final class SpellHudClient {
         // draw spell display name — map id -> display name locally or include
         // displayName in packet
         String displayName = SpellRegistry.fromId(currentSpellId).getDisplayName();
-        ctx.drawText(client.textRenderer, displayName, x, y - 10, 0xFFFFFFFF, true);
+        ctx.drawText(client.textRenderer, displayName, x, y - 10, 0xFFFFD700, true);
     }
 }

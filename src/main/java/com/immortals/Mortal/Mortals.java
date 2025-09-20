@@ -468,6 +468,7 @@ public class Mortals {
                                             return 0;
                                         }
                                         data.setImmortal(newState);
+                                        Utils.sendSpellInfoToPlayer(targetPlayer, null, "", 0, 0);
                                         // Reset spell bindings
                                         for (int slot = 0; slot < 9; slot++) {
                                             SpellRegistry bound = SpellRegistry.getBound(targetPlayer, slot);

@@ -61,13 +61,16 @@ public class Immortals {
 
         // Register fragment activation from punching
         ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.FragmentC2SPayload.ID, (payload, context) -> {
-            if (!(context.player() instanceof ServerPlayerEntity user))
+            if (!(context.player() instanceof ServerPlayerEntity user) || !((ImmortalsData) user).isImmortal())
                 return;
-            if (fragmentCount.getOrDefault(user.getUuid(), 0) >= 3) {
+            if (fragmentCount.getOrDefault(user.getUuid(), -1) == -1) {
+                return;
+            }
+            if (fragmentCount.getOrDefault(user.getUuid(), -1) >= 3) {
+                fragmentCount.put(user.getUuid(), -1);
                 SpellRegistry.recordUse(user, SpellRegistry.FRAGMENT);
                 return;
             }
-            System.out.println("Throwing fragment");
             Vec3d playerPos = user.getPos();
             Vec3d lookVec = user.getRotationVec(1.0F).normalize();
             ServerWorld world = user.getWorld();
@@ -162,15 +165,10 @@ public class Immortals {
                 // Grant +1 attack damage if player has Dragon Egg and is immortal
                 EntityAttributeInstance attackAttr = player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE);
 
-                if (attackAttr.getBaseValue() > 2.0) {
-                    attackAttr.setBaseValue(1.0);
-                    System.out.println("Attack damage: " + attackAttr.getValue());
-                }
-
-                double baseAttack = player.getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE); // Default base value
+                double baseAttack = 1.0; // Default base value
                 if (Utils.inventoryHas(player, Items.DRAGON_EGG) != -1 && ((ImmortalsData) player).isImmortal()) {
                     // Only increase if not already increased
-                    if (attackAttr != null && attackAttr.getValue() <= baseAttack) {
+                    if (attackAttr != null && attackAttr.getBaseValue() <= baseAttack) {
                         MutableText message = Text.literal("Unlocked ");
                         MutableText spellText = Text.literal("Dragon Ascent")
                                 .styled(style -> style.withHoverEvent(
@@ -185,7 +183,7 @@ public class Immortals {
                     }
                 } else {
                     // Only decrease if currently increased
-                    if (attackAttr != null && attackAttr.getValue() > baseAttack) {
+                    if (attackAttr != null && attackAttr.getBaseValue() > baseAttack) {
                         attackAttr.setBaseValue(baseAttack);
                     }
                 }
@@ -206,9 +204,9 @@ public class Immortals {
                                             .withColor(0xFFD700)); // Gold color
 
                             player.sendMessage(message.append(spellText)
-                                    .append(" and gained Haste 2 block break speed! Hover to see details!"));
+                                    .append(" and gained +1 block break speed! Hover to see details!"));
                         }
-                        blockBreakAttr.setBaseValue(baseBreakAttr + 2.0); // Adjust block break speed for Haste II
+                        blockBreakAttr.setBaseValue(baseBreakAttr + 1.0);
                     }
                 } else {
                     // Only decrease if currently increased
@@ -362,8 +360,13 @@ public class Immortals {
             newData.getTrusted().addAll(oldData.getTrusted());
         });
 
-        // Send decreased corruption message on respawn
+        // Send decreased corruption message on respawn, ignoring dimension travel
         ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
+            // Check if the respawn is due to death and not dimension travel
+            if (!oldPlayer.getWorld().getRegistryKey().equals(newPlayer.getWorld().getRegistryKey())) {
+                return;
+            }
+
             // Make sure tick rate is reset
             ImmortalsData newPlayerData = (ImmortalsData) newPlayer;
             try {
@@ -380,7 +383,7 @@ public class Immortals {
                 }
                 int next = Utils.nextShardCost(corr);
                 newPlayer.sendMessage(
-                        Text.literal("§cYou feel weakened. Corruption: " + corr + "Next: " + next),
+                        Text.literal("§cYou feel weakened. Corruption: " + corr + " Next: " + next),
                         true);
             }
         });

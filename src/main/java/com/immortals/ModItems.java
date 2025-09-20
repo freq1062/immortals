@@ -32,13 +32,14 @@ public class ModItems {
                         case "ascension_relic" -> {
                                 lore = """
                                                 §cThese relics were manifested long ago
-                                                from an intense fear of death.
+                                                §cfrom an intense fear of death.
                                                 """;
                         }
                         case "soul_purifier" -> {
                                 lore = """
                                                 §cA concentrated piece of positive magic. However,
-                                                The soul purifier can return your soul to its original state.
+                                                The soul purifier can only return your
+                                                soul to its original state.
                                                 """;
                         }
                         case "soul_shard" -> {
@@ -90,16 +91,16 @@ public class ModItems {
                                                 §iCrafted in the Null Space where time collapses,
                                                 Each strike lands before it is swung.
 
-                                                §6§lOVERCLOCK: Shift + right click to apply haste 5 and speed
+                                                §6§lOVERCLOCK: §fShift + right click to apply haste 5 and speed
                                                 3 for %d seconds. §a%d second cooldown.
 
-                                                §6§lBLINK: When below %.2f%% health, the axe applies true
+                                                §6§lBLINK: §fWhen below %.2f health, the axe applies true
                                                 invisibility for %d seconds.
                                                 §a%d second cooldown.
                                                 """,
                                                 Main.CONFIG.getInt("overclockDuration") / 20,
                                                 Main.CONFIG.getInt("overclockCooldown") / 20,
-                                                Main.CONFIG.getDouble("blinkThreshold") * 10,
+                                                Main.CONFIG.getDouble("blinkThreshold"),
                                                 Main.CONFIG.getInt("blinkDuration") / 20,
                                                 Main.CONFIG.getInt("blinkCooldown") / 20);
                         }
@@ -113,11 +114,21 @@ public class ModItems {
                                 lore = "No lore found for item: " + itemName;
                         }
                 }
-                lore = lore.replaceAll("\n", "\\\\n").replaceAll("\\s+", " ").trim();
-                String[] parts = lore.split("(?=§[0-9a-fk-or])");
+                String[] lines = lore.split("\n");
                 java.util.List<net.minecraft.text.Text> formattedLore = new java.util.ArrayList<>();
-                for (String part : parts) {
-                        formattedLore.add(net.minecraft.text.Text.literal(part));
+                String previousFormatting = ""; // Keep track of the previous formatting style
+
+                for (String line : lines) {
+                        line = line.replaceAll("\\s+", " ").trim();
+                        String[] parts = line.split("(?=§[0-9a-fk-or])");
+                        for (String part : parts) {
+                                if (part.startsWith("§")) {
+                                        previousFormatting = part.substring(0, 2); // Update formatting style
+                                } else {
+                                        part = previousFormatting + part; // Apply previous formatting if none is found
+                                }
+                                formattedLore.add(net.minecraft.text.Text.literal(part));
+                        }
                 }
                 return new LoreComponent(formattedLore);
         }

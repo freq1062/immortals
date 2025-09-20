@@ -22,6 +22,8 @@ import com.immortals.hud.SpellHudClient;
 import com.immortals.entity.FragmentEntityRenderer;
 import com.immortals.network.NetworkChannels;
 
+import io.github.dennisochulor.tickrate.TickRateClientManager;
+
 import java.util.Map;
 
 import org.lwjgl.glfw.GLFW;
@@ -61,8 +63,12 @@ public class ImmortalsClient implements ClientModInitializer {
 
     public static final java.util.List<Object> pendingObjects = new java.util.ArrayList<>();
 
+    // Array to keep track of the last activation time
+    private static long[] lastActivationTime = { 0 };
+
     @Override
     public void onInitializeClient() {
+        TickRateClientManager.serverHasMod();
         // Register fragment entity renderers
         EntityRendererRegistry.register(ImmortalEntity.FRAGMENT_ENTITY, FragmentEntityRenderer::new);
 
@@ -110,9 +116,6 @@ public class ImmortalsClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(NetworkChannels.SpellHudS2CPayload.ID,
                 (payload, context) -> {
-                    System.out.println("Received spell HUD update: " + payload.spellID() + ", state: " + payload.state()
-                            + ", currCooldown: " + payload.currCooldown() + ", maxCooldown: " + payload.maxCooldown());
-                    // safely schedule work on client thread
                     context.client().execute(() -> {
                         SpellHudClient.displaySpell(
                                 payload.spellID(),
@@ -152,19 +155,24 @@ public class ImmortalsClient implements ClientModInitializer {
                     float displaySize = rune.size();
                     int totalLifetime = rune.lifetimeTicks();
 
-                    // Calculate smooth progress using current time for frame interpolation
-                    float tickDuration = 50.0f; // Milliseconds per tick (20 ticks per second)
-                    float tickProgress = (System.currentTimeMillis() % tickDuration) / tickDuration;
+                    // Add sub-tick interpolation for smoother animations
+                    float tickDuration = 50.0f; // ms per tick
+                    float tickProgress = (System.currentTimeMillis() % (long) tickDuration) / tickDuration;
                     float smoothElapsed = rune.ticksElapsed() + tickProgress;
-                    float smoothProgress = smoothElapsed / (float) totalLifetime;
 
-                    // Animate size: grow in first 15%, shrink in last 10% of lifetime
-                    if (smoothProgress < 0.15f) {
-                        displaySize = rune.size() * (smoothProgress / 0.15f); // Grow from 0 to full size
-                    } else if (smoothProgress > 0.9f) {
-                        displaySize = rune.size() * ((1.0f - smoothProgress) / 0.1f); // Shrink from full size to 0
+                    // Fixed timing for growth and shrinking
+                    int growDurationTicks = Math.min(15, (int) (totalLifetime * 0.15f));
+                    int shrinkDurationTicks = Math.min(10, (int) (totalLifetime * 0.10f));
+
+                    // Animate size: grow at start, shrink at end
+                    if (smoothElapsed < growDurationTicks) {
+                        displaySize = rune.size() * (smoothElapsed / growDurationTicks); // Grow from 0 to full size
+                    } else if (totalLifetime - smoothElapsed < shrinkDurationTicks) {
+                        displaySize = rune.size() * ((totalLifetime - smoothElapsed) / shrinkDurationTicks);
+                        // Shrink to 0
                     }
 
+                    // Render the rune with the calculated size
                     ClientUtils.renderRune(context, rune.texture(), rune.x(), rune.y(), rune.z(), displaySize);
                 } else if (o instanceof SphereData sphere) {
                     ClientUtils.renderSphere(context, sphere.x(), sphere.y(), sphere.z(), sphere.color(),
@@ -206,11 +214,14 @@ public class ImmortalsClient implements ClientModInitializer {
                 ClientPlayNetworking.send(payload);
             }
 
-            // Check if the attack key (left click) was pressed and released
-            if (!client.options.attackKey.isPressed() && client.options.attackKey.wasPressed()) {
-                System.out.println("Attack key released, throwing fragment");
-                NetworkChannels.FragmentC2SPayload payload = new NetworkChannels.FragmentC2SPayload(0);
-                ClientPlayNetworking.send(payload);
+            // Check if the left mouse button was clicked and prevent spamming
+            if (client.mouse.wasLeftButtonClicked()) {
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastActivationTime[0] >= 500) {
+                    NetworkChannels.FragmentC2SPayload payload = new NetworkChannels.FragmentC2SPayload(0);
+                    ClientPlayNetworking.send(payload);
+                    lastActivationTime[0] = currentTime; // Update the last activation time
+                }
             }
 
             SpellHudClient.tick(client);

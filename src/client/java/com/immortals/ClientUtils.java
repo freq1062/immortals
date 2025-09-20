@@ -4,7 +4,6 @@ import org.joml.Matrix4f;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.data.Models;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.render.Camera;
@@ -12,20 +11,13 @@ import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.VertexConsumers;
 import net.minecraft.client.render.entity.EntityRenderDispatcher;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
-import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.PlayerEntityModel;
-import net.minecraft.client.render.entity.state.BipedEntityRenderState;
-import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemDisplayContext;
-import net.minecraft.util.Arm;
-import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
@@ -325,7 +317,7 @@ public class ClientUtils {
                 matrices.push();
 
                 // Translate to desired world position relative to camera
-                matrices.translate((float) (x - camPos.x), (float) (y - camPos.y), (float) (z - camPos.z));
+                matrices.translate((float) (x - camPos.x), (float) (y - camPos.y + 1), (float) (z - camPos.z));
 
                 // Rotate world yaw so the player faces the same direction as the live player.
                 // Use negative yaw because matrix rotation is clockwise for positive degrees;

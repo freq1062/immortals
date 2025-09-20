@@ -172,7 +172,7 @@ public class Weapons {
                         Vec3d pos = player.getPos();
                         double height = player.getHeight();
                         double width = player.getWidth();
-                        int points = 6;
+                        int points = 1;
                         for (int i = 0; i < points; i++) {
                             double y = pos.y + 0.1 + (height - 0.2) * i / (points - 1);
                             int ringPoints = 8;
@@ -182,7 +182,7 @@ public class Weapons {
                                 double dz = Math.sin(angle) * width * 0.3;
                                 ((ServerWorld) player.getWorld()).spawnParticles(
                                         ParticleTypes.GLOW,
-                                        pos.x + dx, y, pos.z + dz,
+                                        pos.x + dx * 0.25, y, pos.z + dz * 0.25,
                                         1, 0, 0, 0, 0.0);
                             }
                         }
@@ -208,7 +208,7 @@ public class Weapons {
                     || !(victim instanceof ServerPlayerEntity))
                 return ActionResult.PASS;
 
-            if (!((ImmortalsData) attacker).isImmortal())
+            if (((ImmortalsData) attacker).isImmortal())
                 return ActionResult.PASS;
 
             ItemStack weapon = sp.getStackInHand(hand);
@@ -244,10 +244,10 @@ public class Weapons {
                     ent.velocityModified = true;
 
                     float maxHealth = (victim instanceof LivingEntity le) ? le.getMaxHealth() : 20.0f;
-                    float damage = maxHealth * ((Number) Main.CONFIG.getDouble("fractalTotalDmg")).floatValue() / 4.0f;
+                    float damage = maxHealth * ((Number) Main.CONFIG.getDouble("fractalEdgeDmg")).floatValue() / 4.0f;
                     for (int i = 0; i < 4; i++) {
                         final int index = i;
-                        int delay = index * 500;
+                        int delay = index * 10; // Convert from ms to ticks
                         Main.scheduler.schedule(() -> {
                             ent.damage((ServerWorld) world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) attacker),
                                     damage);
@@ -265,7 +265,7 @@ public class Weapons {
                                     world.playSound(null, attacker.getX(), attacker.getY(), attacker.getZ(),
                                             net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP,
                                             net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.0F);
-                                }, j * (500 / 3));
+                                }, j * (10 / 3)); // Convert from ms to ticks
                             }
 
                         }, delay);
@@ -284,13 +284,13 @@ public class Weapons {
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
                 UUID id = player.getUuid();
                 if (PHASE_CHANGE_COOLDOWNS.get(id) != null
-                        && player.getMainHandStack().getItem() != ModItems.PHASEBREAKER) {
+                        && player.getMainHandStack().getItem() == ModItems.PHASEBREAKER) {
                     long elapsed = System.currentTimeMillis() - PHASE_CHANGE_COOLDOWNS.get(id);
                     long remainingMs = Main.CONFIG.getInt("phaseChangeCooldown") * 50 - elapsed;
 
                     if (remainingMs > 0) {
-                        // long secsLeft = (remainingMs + 999) / 1000;
-                        // player.sendMessage(Text.literal("§ePhase Change: " + secsLeft + "s"), true);
+                        long secsLeft = (remainingMs + 999) / 1000;
+                        player.sendMessage(Text.literal("§ePhase Change: " + secsLeft + "s"), true);
                     } else {
                         player.sendMessage(Text.literal("§aPhase Change ready!"), true);
                         PHASE_CHANGE_COOLDOWNS.remove(id);
@@ -301,8 +301,8 @@ public class Weapons {
                     long remainingMs = Main.CONFIG.getInt("overclockCooldown") * 50 - elapsed;
 
                     if (remainingMs > 0) {
-                        // long secsLeft = (remainingMs + 999) / 1000;
-                        // player.sendMessage(Text.literal("§bOverclock: " + secsLeft + "s"), true);
+                        long secsLeft = (remainingMs + 999) / 1000;
+                        player.sendMessage(Text.literal("§bOverclock: " + secsLeft + "s"), true);
                     } else {
                         player.sendMessage(Text.literal("§aOverclock ready!"), true);
                         OVERCLOCK_COOLDOWNS.remove(id);
@@ -313,8 +313,8 @@ public class Weapons {
                     long remainingMs = Main.CONFIG.getInt("blinkCooldown") * 50 - elapsed;
 
                     if (remainingMs > 0) {
-                        // long secsLeft = (remainingMs + 999) / 1000;
-                        // player.sendMessage(Text.literal("§bBlink: " + secsLeft + "s"), true);
+                        long secsLeft = (remainingMs + 999) / 1000;
+                        player.sendMessage(Text.literal("§bBlink: " + secsLeft + "s"), true);
                     } else {
                         player.sendMessage(Text.literal("§aBlink ready!"), true);
                         BLINK_COOLDOWNS.remove(id);
@@ -352,7 +352,7 @@ public class Weapons {
         double offsetZ = (random.nextDouble() - 0.5) * 2.0;
         NetworkChannels.ItemS2CPayload payload = new NetworkChannels.ItemS2CPayload(
                 x, y, z, x + offsetX,
-                y + offsetY, z + offsetZ, Item.getRawId(Items.PURPLE_STAINED_GLASS), 2.0f, 250);
+                y + offsetY, z + offsetZ, Item.getRawId(Items.PURPLE_STAINED_GLASS), 2.0f, 30);
         Utils.sendPayloadToNearby(player, payload);
     }
 

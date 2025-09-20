@@ -230,7 +230,7 @@ public enum SpellRegistry {
                 if (other.squaredDistanceTo(user) <= radius * radius) {
                     if (other == user || other.isTeammate(user) || !((ImmortalsData) other).isImmortal()
                             || Utils.getPlayerData(user).getTrusted().contains(other.getUuid())) {
-                        return;
+                        continue;
                     } else {
                         // Add blindness effect and disable abilities
                         other.addStatusEffect(new StatusEffectInstance(StatusEffects.DARKNESS,
@@ -248,7 +248,6 @@ public enum SpellRegistry {
                 recordUse(user, this);
             }, Main.CONFIG.getInt("blackoutDuration"));
 
-            // Play a sound and spawn particles for feedback
             world.playSound(null, user.getX(), user.getY(), user.getZ(),
                     net.minecraft.sound.SoundEvents.ENTITY_WARDEN_HEARTBEAT, net.minecraft.sound.SoundCategory.PLAYERS,
                     1.2F, 0.7f);
@@ -257,7 +256,7 @@ public enum SpellRegistry {
                     this.getId(), user.getX(), user.getY(), user.getZ(),
                     (float) Main.CONFIG.getDouble("blackoutRadius"),
                     60);
-
+            System.out.println("Sending blackout rune " + this.getId());
             Utils.sendPayloadToNearby(user, payload);
 
             for (double r = 0; r <= radius; r += 0.5) {
@@ -298,7 +297,8 @@ public enum SpellRegistry {
             double playerRadius = 0.7;
             int steps = 10;
             int particlesPerCircle = 32;
-            DustParticleEffect effect = new DustParticleEffect(0x00FF00, 1f); // lime green
+            DustParticleEffect effect = new DustParticleEffect(0x00FF00, 1f); // lime
+                                                                              // green
 
             for (int i = 0; i < steps; i++) {
                 double y = center.y - 1 + playerHeight - (i * playerHeight / (steps - 1));
@@ -341,7 +341,8 @@ public enum SpellRegistry {
 
                 target.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) user), damage);
 
-                // Spawn an X of critical particles in front of the user
+                // Spawn an X of critical particles in front of the user, ensuring it faces the
+                // user
                 double yaw = Math.toRadians(user.getYaw());
                 double pitch = Math.toRadians(user.getPitch());
                 double x = user.getX() - Math.sin(yaw) * Math.cos(pitch) * 1.5;
@@ -354,20 +355,36 @@ public enum SpellRegistry {
 
                 for (int i = -5; i <= 5; i++) {
                     double t = i * 0.1;
-                    // First line
-                    world.spawnParticles(ParticleTypes.CRIT, x + t, y + t, z + t, 1, 0, 0, 0, 0);
-                    // Second line
-                    world.spawnParticles(ParticleTypes.CRIT, x + t, y - t, z + t, 1, 0, 0, 0, 0);
-                    double offset = 0.5; // distance to push the X
-                                         // shape forward
+                    // First line of the X
+                    world.spawnParticles(ParticleTypes.CRIT,
+                            x + t * Math.cos(yaw),
+                            y + t,
+                            z + t * Math.sin(yaw),
+                            1, 0, 0, 0, 0);
+                    // Second line of the X
+                    world.spawnParticles(ParticleTypes.CRIT,
+                            x - t * Math.cos(yaw),
+                            y - t,
+                            z - t * Math.sin(yaw),
+                            1, 0, 0, 0, 0);
+
+                    double offset = 0.5; // distance to push the X shape forward
                     double forwardX = x - Math.sin(yaw) * Math.cos(pitch) * offset;
                     double forwardY = y - Math.sin(pitch) * offset;
                     double forwardZ = z + Math.cos(yaw) * Math.cos(pitch) * offset;
 
-                    world.spawnParticles(ParticleTypes.ENCHANTED_HIT, forwardX + t, forwardY + t, forwardZ + t, 1, 0, 0,
-                            0, 0);
-                    world.spawnParticles(ParticleTypes.ENCHANTED_HIT, forwardX + t, forwardY - t, forwardZ + t, 1, 0, 0,
-                            0, 0);
+                    // First line of the forward X
+                    world.spawnParticles(ParticleTypes.ENCHANTED_HIT,
+                            forwardX + t * Math.cos(yaw),
+                            forwardY + t,
+                            forwardZ + t * Math.sin(yaw),
+                            1, 0, 0, 0, 0);
+                    // Second line of the forward X
+                    world.spawnParticles(ParticleTypes.ENCHANTED_HIT,
+                            forwardX - t * Math.cos(yaw),
+                            forwardY - t,
+                            forwardZ - t * Math.sin(yaw),
+                            1, 0, 0, 0, 0);
                 }
                 ((ImmortalsData) user).setComboCount(target.getUuid(), 0);
             }
@@ -403,10 +420,12 @@ public enum SpellRegistry {
                         double angle = 2 * Math.PI * j / particlesPerRing;
                         double x = center.x + radius * Math.cos(angle);
                         double z = center.z + radius * Math.sin(angle);
-                        double y = center.y + 0.1; // Slightly above ground level
+                        double y = center.y + 0.1; // Slightly
+                                                   // above
+                                                   // ground
+                                                   // level
 
-                        world.spawnParticles(ParticleTypes.BUBBLE, x, y, z, 10, 0, 0, 0, 0.05); // Larger particle
-                                                                                                // effect
+                        world.spawnParticles(ParticleTypes.SPLASH, x, y, z, 50, 0, 0, 0, 0.1); // Larger particle effect
                     }
                     // Remove cobwebs within the radius
                     BlockPos.stream(BlockPos.ofFloored(center.subtract(radius, radius, radius)),
@@ -428,13 +447,15 @@ public enum SpellRegistry {
                             double x = center.x + Math.cos(randomAngle) * randomRadius;
                             double z = center.z + Math.sin(randomAngle) * randomRadius;
                             double y = center.y + 0.1;
-                            world.spawnParticles(ParticleTypes.SPLASH, x, y, z, 1, 0, 0, 0, 0.01);
+                            world.spawnParticles(ParticleTypes.SPLASH, x, y, z, 25, 0, 0, 0, 0.01);
                         }
                         BlockPos.stream(BlockPos.ofFloored(center.subtract(maxRadius, maxRadius, maxRadius)),
                                 BlockPos.ofFloored(center.add(maxRadius, maxRadius, maxRadius)))
                                 .filter(pos -> world.getBlockState(pos).isOf(net.minecraft.block.Blocks.COBWEB))
                                 .forEach(pos -> world.breakBlock(pos, false));
-                    }, step * 5); // every 5 ticks
+                    }, step * 5); // every
+                                  // 5
+                                  // ticks
                 }
             }, maxRadius);
 
@@ -464,10 +485,13 @@ public enum SpellRegistry {
                     Main.CONFIG.getInt("linkCooldown") / 20)) {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
+            user.getWorld().playSound(null, user.getX(), user.getY(), user.getZ(),
+                    net.minecraft.sound.SoundEvents.BLOCK_ANVIL_LAND, net.minecraft.sound.SoundCategory.PLAYERS, 1.5F,
+                    2.0F);
             ((ImmortalsData) user).setLinked(target.getUuid());
             ((ImmortalsData) target).setLinked(user.getUuid());
-            user.sendMessage(Text.literal("A link has been formed with " + target.getName()), true);
-            target.sendMessage(Text.literal("A link has been formed with " + user.getName()), true);
+            user.sendMessage(Text.literal("A link has been formed with " + target.getName().getString()), true);
+            target.sendMessage(Text.literal("A link has been formed with " + user.getName().getString()), true);
             AtomicBoolean ended = new AtomicBoolean(false);
             for (int i = 0; i < Main.CONFIG.getInt("linkDuration"); i++) {
                 if (i % 20 == 0) {
@@ -478,6 +502,19 @@ public enum SpellRegistry {
                             // Dish out benefits
                             applyBenefits(user);
                             applyBenefits(target);
+
+                            // Draw a line of metal particles from user to target at center level
+                            Vec3d userPos = user.getPos().add(0, user.getStandingEyeHeight() * 0.5, 0);
+                            Vec3d targetPos = target.getPos().add(0, target.getStandingEyeHeight() * 0.5, 0);
+                            Vec3d direction = targetPos.subtract(userPos).normalize();
+                            double distance = userPos.distanceTo(targetPos);
+                            ServerWorld world = (ServerWorld) user.getWorld();
+
+                            for (double d = 0; d < distance; d += 0.2) {
+                                Vec3d particlePos = userPos.add(direction.multiply(d));
+                                world.spawnParticles(ParticleTypes.FALLING_LAVA, particlePos.x, particlePos.y,
+                                        particlePos.z, 1, 0, 0, 0, 0.01);
+                            }
                         } else {
                             // Revoke benefits
                             revokeBenefits(user);
@@ -487,7 +524,14 @@ public enum SpellRegistry {
                             ((ImmortalsData) user).setLinked(null);
                             ((ImmortalsData) target).setLinked(null);
                             ended.set(true);
-                            recordUse(user, this); // Record use if all linked players are removed
+                            recordUse(user, this); // Record
+                                                   // use
+                                                   // if
+                                                   // all
+                                                   // linked
+                                                   // players
+                                                   // are
+                                                   // removed
                         }
                     }, i);
                 }
@@ -511,16 +555,12 @@ public enum SpellRegistry {
 
         private void applyBenefits(ServerPlayerEntity player) {
             if (((ImmortalsData) player).isImmortal()) {
-                player.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40,
-                        0, false, false));
+                player.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40, 0, false, false));
             } else {
-                if (player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE)
-                        .getBaseValue() == player
-                                .getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE)) {
-                    System.out.println("Applying attack damage boost from link to "
-                            + player.getName().getString());
-                    player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE)
-                            .setBaseValue(2.0);
+                if (player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE).getBaseValue() == player
+                        .getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE)) {
+                    System.out.println("Applying attack damage boost from link to " + player.getName().getString());
+                    player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE).setBaseValue(2.0);
                 }
             }
         }
@@ -530,8 +570,7 @@ public enum SpellRegistry {
                 player.removeStatusEffect(StatusEffects.REGENERATION);
             } else {
                 player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE)
-                        .setBaseValue(player
-                                .getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE));
+                        .setBaseValue(player.getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE));
             }
 
         }
@@ -581,8 +620,10 @@ public enum SpellRegistry {
                 // Lock the item for 10 seconds
                 Main.scheduler.schedule(() -> {
                     recordUse(user, this);
-                    user.sendMessage(Text.literal(targetItem[0].getItem().getName() + " has been unlocked."), true);
-                    target.sendMessage(Text.literal(targetItem[0].getItem().getName() + " has been unlocked."), true);
+                    user.sendMessage(
+                            Text.literal(targetItem[0].getItem().getName().getString() + " has been unlocked."), true);
+                    target.sendMessage(
+                            Text.literal(targetItem[0].getItem().getName().getString() + " has been unlocked."), true);
                 }, Main.CONFIG.getInt("lockDuration"));
             }
         }
@@ -622,8 +663,8 @@ public enum SpellRegistry {
             Utils.grant(user, "dragon_ascent");
 
             // Announce to nearby players and draw dragon ascent runes
-            NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload(
-                    "dragon_ascent", user.getX(), user.getY(), user.getZ(), 14.0f, 80);
+            NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload("dragon_ascent", user.getX(),
+                    user.getY(), user.getZ(), 14.0f, 80);
 
             Utils.sendPayloadToNearby(user, payload);
 
@@ -678,29 +719,39 @@ public enum SpellRegistry {
             if (!(world instanceof ServerWorld serverWorld))
                 return;
             double y = pos.y;
-            int particleCount = 100; // Number of particles to spawn
+            int particleCount = 100; // Number of
+                                     // particles to
+                                     // spawn
             double radius = 30.0;
             for (int i = 0; i < particleCount; i++) {
                 double angle = Math.random() * 2 * Math.PI;
-                double dist = Math.sqrt(Math.random()) * radius; // Uniform distribution in circle
+                double dist = Math.sqrt(Math.random()) * radius; // Uniform
+                                                                 // distribution
+                                                                 // in
+                                                                 // circle
                 double x = pos.x + Math.cos(angle) * dist;
                 double z = pos.z + Math.sin(angle) * dist;
-                double py = y + (Math.random() - 0.5) * 2; // Small vertical variation
+                double py = y + (Math.random() - 0.5) * 2; // Small
+                                                           // vertical
+                                                           // variation
                 serverWorld.spawnParticles(ParticleTypes.PORTAL, x, py, z, 1, 0, 0, 0, 0);
             }
         }
 
         public static void strikeLightning(ServerWorld world, Vec3d position) {
-            LightningEntity lightningBolt = EntityType.LIGHTNING_BOLT.create(
-                    world,
-                    entity -> {
-                    }, // No-op consumer
-                    new BlockPos((int) position.x, (int) position.y, (int) position.z),
-                    SpawnReason.TRIGGERED,
-                    true,
+            LightningEntity lightningBolt = EntityType.LIGHTNING_BOLT.create(world, entity -> {
+            }, // No-op consumer
+                    new BlockPos((int) position.x, (int) position.y, (int) position.z), SpawnReason.TRIGGERED, true,
                     true);
             if (lightningBolt != null) {
-                lightningBolt.setCosmetic(true); // Mark the lightning as cosmetic to prevent damage
+                lightningBolt.setCosmetic(true); // Mark
+                                                 // the
+                                                 // lightning
+                                                 // as
+                                                 // cosmetic
+                                                 // to
+                                                 // prevent
+                                                 // damage
                 world.spawnEntity(lightningBolt);
             }
         }
@@ -720,8 +771,8 @@ public enum SpellRegistry {
                 return;
             }
             Utils.grant(user, "timeslow");
-            NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload(
-                    "timeslow", user.getX(), user.getY(), user.getZ(), 14.0f, Main.CONFIG.getInt("timeSlowDuration"));
+            NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload("timeslow", user.getX(),
+                    user.getY(), user.getZ(), 14.0f, Main.CONFIG.getInt("timeSlowDuration"));
 
             Utils.sendPayloadToNearby(user, payload);
 
@@ -936,6 +987,8 @@ public enum SpellRegistry {
         Map<Integer, String> bindings = ((ImmortalsData) player).getSpellBindings();
         bindings.entrySet().removeIf(entry -> spell.getId().equals(entry.getValue()));
         bindings.put(slot, spell.getId());
+        Utils.sendSpellInfoToPlayer(player, spell.getId(), Utils.currentSpellState(player, spell),
+                Utils.currentCooldown(player, spell), spell.getCooldownTicks());
     }
 
     /** Unbind a spell */
@@ -1005,7 +1058,6 @@ public enum SpellRegistry {
         if (Spell.pendingCooldownNotifications.containsKey(player.getUuid())
                 && Spell.pendingCooldownNotifications.get(player.getUuid()).getOrDefault(spell, 0) == -1) {
             // Cooldown pending after spell effects end
-            System.out.println("Spell " + spell.getId() + " is still in use by " + player.getName().getString());
             return false;
         }
         var map = LAST_USED.get(player.getUuid());
@@ -1024,19 +1076,15 @@ public enum SpellRegistry {
                 .put(spell, System.currentTimeMillis());
         long cd = spell.getCooldownTicks();
         int secs = (int) Math.ceil(cd / 20.0);
-        System.out.println("Recording use of " + spell.getId() + " by " + player.getName().getString()
-                + " with cooldown " + secs + "s");
         Spell.pendingCooldownNotifications
                 .computeIfAbsent(player.getUuid(), u -> new ConcurrentHashMap<>())
                 .put(spell, secs);
         Utils.sendSpellInfoToPlayer(player, spell.getId(), "cooldown",
                 Utils.currentCooldown(player, spell), spell.getCooldownTicks());
-        System.out.println(Spell.pendingCooldownNotifications.get(player.getUuid()).get(spell));
     }
 
     // Record that the spell's cooldown will start after effects end
     public static void recordInUse(ServerPlayerEntity player, SpellRegistry spell) {
-        System.out.println("Recording in-use of " + spell.getId() + " by " + player.getName().getString());
         Spell.pendingCooldownNotifications
                 .computeIfAbsent(player.getUuid(), u -> new ConcurrentHashMap<>())
                 .put(spell, -1);
@@ -1068,8 +1116,9 @@ public enum SpellRegistry {
         }
 
         // Level requirements
-        if (corr < Utils.getRequiredCorr(spell))
+        if (corr < Utils.getRequiredCorr(spell)) {
             return false;
+        }
 
         // Must have a dragon egg to use dragon ascent
         if (spell.id.equals("dragon_ascent") && Utils.inventoryHas(player, Items.DRAGON_EGG) == -1) {
@@ -1090,8 +1139,7 @@ public enum SpellRegistry {
                 player.sendMessage(Text.literal(spell.getDisplayName() + " is still in use!"), true);
                 return false;
             }
-            player.sendMessage(Text.literal(spell.getDisplayName() + " is on cooldown for "
-                    + cooldown + "s!"), true);
+            player.sendMessage(Text.literal(spell.getDisplayName() + " is on cooldown for " + cooldown + "s!"), true);
             return false;
         }
 
@@ -1102,7 +1150,8 @@ public enum SpellRegistry {
             return false;
         }
 
-        recordInUse(player, spell);
+        if (spell != SpellRegistry.SPLINTER_BLOW)
+            recordInUse(player, spell);
         spell.activate(player, target);
         return true;
     }
