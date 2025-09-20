@@ -69,6 +69,7 @@ public class ImmortalsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         TickRateClientManager.serverHasMod();
+        NetworkChannels.register();
         // Register fragment entity renderers
         EntityRendererRegistry.register(ImmortalEntity.FRAGMENT_ENTITY, FragmentEntityRenderer::new);
 
@@ -144,6 +145,10 @@ public class ImmortalsClient implements ClientModInitializer {
 
         // Render pending objects every frame
         WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+            if (MinecraftClient.getInstance().player == null
+                    || MinecraftClient.getInstance().getNetworkHandler() == null) {
+                return;
+            }
             if (pendingObjects.isEmpty())
                 return;
 
@@ -205,9 +210,14 @@ public class ImmortalsClient implements ClientModInitializer {
 
         // Decrement lifetimes every tick and remove expired objects
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-
+            if (client.player == null || client.getNetworkHandler() == null) {
+                return;
+            }
             // Handle spell key press/release
             if (!SPELL_KEY.isPressed() && SPELL_KEY.wasPressed()) {
+                if (client.player == null || client.getNetworkHandler() == null) {
+                    return;
+                }
                 // Send a packet to the server when the key is released
                 int selectedSlot = client.player.getInventory().getSelectedSlot();
                 NetworkChannels.SpellC2SPayload payload = new NetworkChannels.SpellC2SPayload(selectedSlot);

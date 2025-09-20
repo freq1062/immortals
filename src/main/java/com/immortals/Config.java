@@ -53,7 +53,7 @@ public class Config {
                 new ConfigOption("waveDuration", 200, "Duration cobwebs are removed (ticks)"),
                 new ConfigOption("waveCooldown", 900, "Cooldown for wave ability (ticks)"),
                 new ConfigOption("fragmentCooldown", 800, "Cooldown for fragment ability (ticks)"),
-                new ConfigOption("fragmentDmg", 0.15, "Damage dealt by each fragment as a fraction of max HP"),
+                new ConfigOption("fragmentDmg", 0.2, "Damage dealt by each fragment as a fraction of max HP"),
                 new ConfigOption("lockDuration", 200, "Duration of lock ability (ticks)"),
                 new ConfigOption("lockCooldown", 600, "Cooldown for lock ability (ticks)"),
                 new ConfigOption("dragonAscentRadius", 10.0, "Radius for dragon ascent ability (blocks)"),

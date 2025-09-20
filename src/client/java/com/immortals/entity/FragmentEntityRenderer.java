@@ -63,7 +63,7 @@ public class FragmentEntityRenderer extends EntityRenderer<FragmentEntity, Fragm
         matrices.push();
 
         // overall scale for the fragment
-        matrices.scale(0.8F, 0.8F, 0.8F);
+        matrices.scale(1.0F, 1.0F, 1.0F);
 
         // --- pick a pivot in model-space to rotate around ---
         // These numbers are in Minecraft world units (1.0 = 1 block).

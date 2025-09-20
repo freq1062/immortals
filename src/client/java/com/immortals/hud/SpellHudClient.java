@@ -9,29 +9,22 @@ import net.minecraft.client.render.RenderTickCounter;
 public final class SpellHudClient {
     private static volatile String currentSpellId = null;
     private static volatile String currentState = "ready"; // "ready","in_use","cooldown"
-    private static volatile int elapsedTicks = 0; // Renamed to reflect ticks passed
+    private static volatile int remainingTicks = 0; // Renamed to reflect ticks passed
     private static volatile int maxTicks = 0;
 
-    public static void displaySpell(String spellId, String state, int elapsed, int max) {
+    public static void displaySpell(String spellId, String state, int remaining, int max) {
         currentSpellId = spellId;
         currentState = state;
-        elapsedTicks = elapsed;
+        remainingTicks = remaining;
         maxTicks = max;
-    }
-
-    public static void clearDisplayedSpell() {
-        currentSpellId = null;
-        currentState = "ready";
-        elapsedTicks = 0;
-        maxTicks = 0;
     }
 
     // call this each client tick (register via ClientTickEvents.END_CLIENT_TICK)
     public static void tick(MinecraftClient client) {
         // Local countdown smoothing:
-        if (currentSpellId != null && "cooldown".equals(currentState) && elapsedTicks < maxTicks) {
-            elapsedTicks = Math.min(maxTicks, elapsedTicks + 1);
-            if (elapsedTicks == maxTicks)
+        if (currentSpellId != null && "cooldown".equals(currentState) && remainingTicks > 0) {
+            remainingTicks = Math.max(0, remainingTicks - 1);
+            if (remainingTicks == 0)
                 currentState = "ready";
         }
     }
@@ -66,8 +59,10 @@ public final class SpellHudClient {
             }
             case "cooldown" -> {
                 if (maxTicks > 0) {
-                    float progress = (float) elapsedTicks / (float) maxTicks;
-                    fillW = (int) (barWidth * progress); // percentage filled based on elapsed ticks
+                    if (remainingTicks % 20 == 0)
+                        System.out.println(remainingTicks + "/" + maxTicks);
+                    float progress = 1.0f - (float) remainingTicks / (float) maxTicks;
+                    fillW = (int) (barWidth * progress); // percentage filled based on elapsed cooldown
                 }
                 color = 0xFFFFFF00; // yellow
             }

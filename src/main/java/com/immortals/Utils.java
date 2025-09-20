@@ -226,14 +226,15 @@ public class Utils {
     }
 
     public static int currentCooldown(ServerPlayerEntity player, SpellRegistry spell) {
-        Map<SpellRegistry, Integer> spellEntry = Spell.pendingCooldownNotifications.getOrDefault(player.getUuid(),
-                null);
+        Map<SpellRegistry, Integer> spellEntry = Spell.pendingCooldownNotifications.get(player.getUuid());
+        System.out.println(spellEntry);
         if (spellEntry == null)
             return 0;
         Integer currCooldown = spellEntry.get(spell);
+        System.out.println(currCooldown);
         if (currCooldown == null || currCooldown == -1)
             return 0;
-        return currCooldown;
+        return currCooldown * 20; // convert to ticks
     }
 
     public static String currentSpellState(ServerPlayerEntity player, SpellRegistry spell) {
@@ -258,6 +259,8 @@ public class Utils {
      */
     public static void sendSpellInfoToPlayer(ServerPlayerEntity player, @Nullable String spellId,
             String state, int remainingTicks, int maxTicks) {
+        System.out.println("Sending spell info to player: " + player.getName().getString() +
+                " spell: " + spellId + " state: " + state + " remaining: " + remainingTicks + "/" + maxTicks);
         NetworkChannels.SpellHudS2CPayload payload = new NetworkChannels.SpellHudS2CPayload(
                 spellId == null ? "empty" : spellId, state, remainingTicks, maxTicks);
 

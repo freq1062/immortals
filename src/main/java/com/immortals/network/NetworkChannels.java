@@ -1,13 +1,33 @@
 package com.immortals.network;
 
 import net.minecraft.util.Identifier;
-
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.network.packet.CustomPayload;
 
 public final class NetworkChannels {
+
+        public static void register() {
+                // Server to client
+                PayloadTypeRegistry.playS2C().register(NetworkChannels.RuneS2CPayload.ID,
+                                NetworkChannels.RuneS2CPayload.CODEC);
+                PayloadTypeRegistry.playS2C().register(NetworkChannels.SphereS2CPayload.ID,
+                                NetworkChannels.SphereS2CPayload.CODEC);
+                PayloadTypeRegistry.playS2C().register(NetworkChannels.ItemS2CPayload.ID,
+                                NetworkChannels.ItemS2CPayload.CODEC);
+                PayloadTypeRegistry.playS2C().register(NetworkChannels.SpellHudS2CPayload.ID,
+                                NetworkChannels.SpellHudS2CPayload.CODEC);
+                PayloadTypeRegistry.playS2C().register(NetworkChannels.GhostS2CPayload.ID,
+                                NetworkChannels.GhostS2CPayload.CODEC);
+                // Client to server
+                PayloadTypeRegistry.playC2S().register(NetworkChannels.SpellC2SPayload.ID,
+                                NetworkChannels.SpellC2SPayload.CODEC);
+                PayloadTypeRegistry.playC2S().register(NetworkChannels.FragmentC2SPayload.ID,
+                                NetworkChannels.FragmentC2SPayload.CODEC);
+        }
+
         // Runes
         public record RuneS2CPayload(String spellId, double x, double y, double z, float maxSize, int lifetimeTicks)
                         implements CustomPayload {

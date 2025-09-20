@@ -326,8 +326,10 @@ public class Mortals {
                                     "Use to replenish Strength II and " + chosen + " for 1 minute 30 seconds.")
                                     .styled(style -> style.withItalic(false).withColor(0xAAAAAA)));
                     stackToAugment.set(DataComponentTypes.LORE, new net.minecraft.component.type.LoreComponent(lore));
+                    Main.scheduler.schedule(() -> {
+                        player.sendMessage(Text.literal("§bAugmented into a " + talismanName + "!"), false);
+                    }, 60);
 
-                    player.sendMessage(Text.literal("§bAugmented into a " + talismanName + "!"), false);
                 } else {
                     // Augment as usual
                     for (java.util.AbstractMap.SimpleEntry<RegistryEntry<EntityAttribute>, Float> entry : Augmentation
@@ -340,7 +342,10 @@ public class Mortals {
                                 entry.getValue(),
                                 EntityAttributeModifier.Operation.ADD_VALUE);
                     }
-                    player.sendMessage(Text.literal("§aAugmented!"), false);
+                    Main.scheduler.schedule(() -> {
+                        player.sendMessage(Text.literal("§aAugmented!"), false);
+                    }, 60);
+
                 }
                 Utils.augmentationAnimation(stackToAugment.copy(), stackToAugment.getItem(), player);
                 stackToAugment.decrement(1);

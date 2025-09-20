@@ -47,7 +47,7 @@ public enum SpellRegistry {
         @Override
         public void activate(ServerPlayerEntity user, ServerPlayerEntity target) {
             Vec3d dir = user.getRotationVec(1.0F).normalize();
-            user.setVelocity(dir.x * 2.5, dir.y * 2.5, dir.z * 2.5);
+            user.setVelocity(dir.x * 1.25, dir.y * 1.25, dir.z * 1.25);
             user.velocityModified = true;
 
             ServerWorld world = (ServerWorld) user.getWorld();
@@ -254,9 +254,8 @@ public enum SpellRegistry {
 
             NetworkChannels.RuneS2CPayload payload = new NetworkChannels.RuneS2CPayload(
                     this.getId(), user.getX(), user.getY(), user.getZ(),
-                    (float) Main.CONFIG.getDouble("blackoutRadius"),
+                    (float) Main.CONFIG.getDouble("blackoutRadius") * 2.0f,
                     60);
-            System.out.println("Sending blackout rune " + this.getId());
             Utils.sendPayloadToNearby(user, payload);
 
             for (double r = 0; r <= radius; r += 0.5) {
@@ -341,8 +340,7 @@ public enum SpellRegistry {
 
                 target.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) user), damage);
 
-                // Spawn an X of critical particles in front of the user, ensuring it faces the
-                // user
+                // Spawn an X of critical particles in front of the user
                 double yaw = Math.toRadians(user.getYaw());
                 double pitch = Math.toRadians(user.getPitch());
                 double x = user.getX() - Math.sin(yaw) * Math.cos(pitch) * 1.5;
@@ -355,23 +353,30 @@ public enum SpellRegistry {
 
                 for (int i = -5; i <= 5; i++) {
                     double t = i * 0.1;
+
                     // First line of the X
                     world.spawnParticles(ParticleTypes.CRIT,
                             x + t * Math.cos(yaw),
                             y + t,
                             z + t * Math.sin(yaw),
                             1, 0, 0, 0, 0);
+
                     // Second line of the X
                     world.spawnParticles(ParticleTypes.CRIT,
                             x - t * Math.cos(yaw),
                             y - t,
                             z - t * Math.sin(yaw),
                             1, 0, 0, 0, 0);
+                }
 
-                    double offset = 0.5; // distance to push the X shape forward
-                    double forwardX = x - Math.sin(yaw) * Math.cos(pitch) * offset;
-                    double forwardY = y - Math.sin(pitch) * offset;
-                    double forwardZ = z + Math.cos(yaw) * Math.cos(pitch) * offset;
+                // Offset the second X slightly forward to make both visible
+                double offset = 0.5; // distance to push the second X shape forward
+                double forwardX = x - Math.sin(yaw) * Math.cos(pitch) * offset;
+                double forwardY = y - Math.sin(pitch) * offset;
+                double forwardZ = z + Math.cos(yaw) * Math.cos(pitch) * offset;
+
+                for (int i = -5; i <= 5; i++) {
+                    double t = i * 0.1;
 
                     // First line of the forward X
                     world.spawnParticles(ParticleTypes.ENCHANTED_HIT,
@@ -379,6 +384,7 @@ public enum SpellRegistry {
                             forwardY + t,
                             forwardZ + t * Math.sin(yaw),
                             1, 0, 0, 0, 0);
+
                     // Second line of the forward X
                     world.spawnParticles(ParticleTypes.ENCHANTED_HIT,
                             forwardX - t * Math.cos(yaw),
@@ -386,6 +392,7 @@ public enum SpellRegistry {
                             forwardZ - t * Math.sin(yaw),
                             1, 0, 0, 0, 0);
                 }
+
                 ((ImmortalsData) user).setComboCount(target.getUuid(), 0);
             }
         }
@@ -425,7 +432,8 @@ public enum SpellRegistry {
                                                    // ground
                                                    // level
 
-                        world.spawnParticles(ParticleTypes.SPLASH, x, y, z, 50, 0, 0, 0, 0.1); // Larger particle effect
+                        world.spawnParticles(ParticleTypes.SPLASH, x, y, z, 10, 0, 0, 0, 0.2); // Reduced particle
+                                                                                               // effect to minimize lag
                     }
                     // Remove cobwebs within the radius
                     BlockPos.stream(BlockPos.ofFloored(center.subtract(radius, radius, radius)),
@@ -441,7 +449,7 @@ public enum SpellRegistry {
                     final int step = i;
                     Main.scheduler.schedule(() -> {
                         // Continuous water particles evenly distributed within the radius
-                        for (int j = 0; j < 50; j++) { // Spawn 50 particles
+                        for (int j = 0; j < 30; j++) {
                             double randomRadius = Math.random() * maxRadius;
                             double randomAngle = Math.random() * 2 * Math.PI;
                             double x = center.x + Math.cos(randomAngle) * randomRadius;
@@ -470,8 +478,7 @@ public enum SpellRegistry {
         }
     },
 
-    // hardcoded for now because im out of time
-    LINK("link", 10 * 20,
+    LINK("link", Main.CONFIG.getInt("linkCooldown"),
             String.format(
                     """
                                     When activated, the next player you hit will be linked
@@ -559,7 +566,6 @@ public enum SpellRegistry {
             } else {
                 if (player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE).getBaseValue() == player
                         .getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE)) {
-                    System.out.println("Applying attack damage boost from link to " + player.getName().getString());
                     player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE).setBaseValue(2.0);
                 }
             }
@@ -576,7 +582,7 @@ public enum SpellRegistry {
         }
     },
 
-    LOCK("lock", 10 * 20, String.format("""
+    LOCK("lock", Main.CONFIG.getInt("lockCooldown"), String.format("""
                     When activated, the opponent's inventory is searched
                     for the item in the slot corresponding with this spell
                     in your hotbar. If it is found, it is locked for
@@ -597,11 +603,20 @@ public enum SpellRegistry {
             }
             final ItemStack[] targetItem = { null };
 
+            // Check hotbar slots first
             for (int i = 0; i < 9; i++) { // Loop through the target's hotbar slots
                 ItemStack currentItem = target.getInventory().getStack(i);
                 if (!currentItem.isEmpty() && userItem.isOf(currentItem.getItem())) {
                     targetItem[0] = currentItem;
                     break;
+                }
+            }
+
+            // If not found in hotbar, check offhand slot
+            if (targetItem[0] == null) {
+                ItemStack offhandItem = target.getOffHandStack();
+                if (!offhandItem.isEmpty() && userItem.isOf(offhandItem.getItem())) {
+                    targetItem[0] = offhandItem;
                 }
             }
 

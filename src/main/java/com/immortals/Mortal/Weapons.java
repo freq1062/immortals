@@ -95,6 +95,20 @@ public class Weapons {
             return ActionResult.PASS;
         });
 
+        // Register spell activation from keybind
+        ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.SpellC2SPayload.ID, (payload, context) -> {
+            if (!(context.player() instanceof ServerPlayerEntity) || ((ImmortalsData) context.player()).isImmortal())
+                return;
+            ItemStack inHand = context.player().getMainHandStack();
+            ServerWorld world = (ServerWorld) context.player().getWorld();
+            if (inHand.getItem() == ModItems.PHASEBREAKER && context.player().isSneaking()) {
+                phaseChange(context.player(), (ServerWorld) world);
+            }
+            if (inHand.getItem() == ModItems.CHRONOREAVER && context.player().isSneaking()) {
+                overclock(context.player(), (ServerWorld) world);
+            }
+        });
+
         // Transform back into special items on death
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
             if (!(entity instanceof ServerPlayerEntity victim) || ((ImmortalsData) victim).isImmortal())
@@ -356,7 +370,7 @@ public class Weapons {
         Utils.sendPayloadToNearby(player, payload);
     }
 
-    private static boolean phaseChange(ServerPlayerEntity player, ServerWorld world) {
+    public static boolean phaseChange(ServerPlayerEntity player, ServerWorld world) {
         UUID id = player.getUuid();
         long now = System.currentTimeMillis();
         Long last = PHASE_CHANGE_COOLDOWNS.get(id);
@@ -417,7 +431,7 @@ public class Weapons {
         return true;
     }
 
-    private static boolean overclock(ServerPlayerEntity player, ServerWorld world) {
+    public static boolean overclock(ServerPlayerEntity player, ServerWorld world) {
         UUID id = player.getUuid();
         long now = System.currentTimeMillis();
         Long last = OVERCLOCK_COOLDOWNS.get(id);

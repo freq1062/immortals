@@ -273,12 +273,11 @@ public class Spell {
                     lastSlot.put(id, current);
                     // Display spell name when switching hotbar slots
                     SpellRegistry bound = SpellRegistry.getBound(player, current);
-
                     if (bound != null && ((ImmortalsData) player).isImmortal()) {
+                        int cooldown = Utils.currentCooldown(player, bound);
                         Utils.sendSpellInfoToPlayer(player, bound.getId(), Utils.currentSpellState(player, bound),
-                                Utils.currentCooldown(player, bound), bound.getCooldownTicks());
-                    }
-                    if (bound == null) {
+                                cooldown, bound.getCooldownTicks());
+                    } else {
                         Utils.sendSpellInfoToPlayer(player, null, "", 0, 0);
                     }
                 }

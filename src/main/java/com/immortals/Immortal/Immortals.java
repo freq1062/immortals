@@ -1,6 +1,7 @@
 package com.immortals.Immortal;
 
 import com.immortals.Utils;
+import com.immortals.Mortal.Weapons;
 import com.immortals.api.ImmortalsData;
 import com.immortals.entity.FragmentEntity;
 import com.immortals.entity.ImmortalEntity;
@@ -12,6 +13,7 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -54,9 +56,26 @@ public class Immortals {
 
         // Register spell activation from keybind
         ServerPlayNetworking.registerGlobalReceiver(NetworkChannels.SpellC2SPayload.ID, (payload, context) -> {
-            if (!(context.player() instanceof ServerPlayerEntity))
+            if (!(context.player() instanceof ServerPlayerEntity sp))
                 return;
-            SpellRegistry.tryActivate(context.player(), null, payload.slot());
+            if (((ImmortalsData) sp).isImmortal()) {
+                if (SpellRegistry.getBound(sp, payload.slot()) == SpellRegistry.SPLINTER_BLOW)
+                    return;
+                SpellRegistry.tryActivate(sp, null, payload.slot());
+            } else {
+                ItemStack inHand = sp.getStackInHand(sp.getActiveHand());
+                switch (inHand) {
+                    case ItemStack stack when stack.getItem() == ModItems.PHASEBREAKER -> {
+                        Weapons.phaseChange(sp, sp.getWorld());
+                    }
+                    case ItemStack stack when stack.getItem() == ModItems.CHRONOREAVER -> {
+                        Weapons.overclock(sp, sp.getWorld());
+                    }
+                    default -> {
+                    }
+                }
+            }
+
         });
 
         // Register fragment activation from punching
@@ -81,7 +100,7 @@ public class Immortals {
             // Set yaw and pitch to match player's look direction
             fragment.setYaw(user.getYaw());
             fragment.setPitch(user.getPitch());
-            fragment.setVelocity(lookVec.x * 1.5, lookVec.y * 1.5, lookVec.z * 1.5);
+            fragment.setVelocity(lookVec.x * 2.0, lookVec.y * 2.0, lookVec.z * 2.0);
             fragment.setCustomNameVisible(true); // Make the ID visible
             fragment.setNoGravity(true); // Set no gravity
             world.spawnEntity(fragment);
@@ -236,6 +255,15 @@ public class Immortals {
                     }
                 }
             }
+        });
+
+        // Prevent using items on blocks if the item is on cooldown (ex. Lock spell)
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            if (player instanceof ServerPlayerEntity sp
+                    && sp.getItemCooldownManager().isCoolingDown(sp.getMainHandStack())) {
+                return ActionResult.FAIL;
+            }
+            return ActionResult.PASS;
         });
 
         // Splinter blow and on-hit spell type activations

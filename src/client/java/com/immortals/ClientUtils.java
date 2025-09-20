@@ -170,38 +170,16 @@ public class ClientUtils {
                                                 .overlay(OverlayTexture.DEFAULT_UV).light(light)
                                                 .normal(entry, nx3, ny3, nz3);
 
-                                // First triangle again with counterclockwise winding (redundant)
+                                // Second triangle (v1, v3, v4) - clockwise winding
                                 // vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
                                 // .overlay(OverlayTexture.DEFAULT_UV).light(light)
                                 // .normal(entry, nx1, ny1, nz1);
                                 // vc.vertex(modelMat, x3, y3, z3).color(r, g, b, a).texture(u3, v3)
                                 // .overlay(OverlayTexture.DEFAULT_UV).light(light)
                                 // .normal(entry, nx3, ny3, nz3);
-                                // vc.vertex(modelMat, x2, y2, z2).color(r, g, b, a).texture(u2, v2)
-                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
-                                // .normal(entry, nx2, ny2, nz2);
-
-                                // Second triangle (v1, v3, v4) - clockwise winding
-                                vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
-                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
-                                                .normal(entry, nx1, ny1, nz1);
-                                vc.vertex(modelMat, x3, y3, z3).color(r, g, b, a).texture(u3, v3)
-                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
-                                                .normal(entry, nx3, ny3, nz3);
-                                vc.vertex(modelMat, x4, y4, z4).color(r, g, b, a).texture(u4, v4)
-                                                .overlay(OverlayTexture.DEFAULT_UV).light(light)
-                                                .normal(entry, nx4, ny4, nz4);
-
-                                // Second triangle again with counterclockwise winding (redundant)
-                                // vc.vertex(modelMat, x1, y1, z1).color(r, g, b, a).texture(u1, v1)
-                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
-                                // .normal(entry, nx1, ny1, nz1);
                                 // vc.vertex(modelMat, x4, y4, z4).color(r, g, b, a).texture(u4, v4)
                                 // .overlay(OverlayTexture.DEFAULT_UV).light(light)
                                 // .normal(entry, nx4, ny4, nz4);
-                                // vc.vertex(modelMat, x3, y3, z3).color(r, g, b, a).texture(u3, v3)
-                                // .overlay(OverlayTexture.DEFAULT_UV).light(light)
-                                // .normal(entry, nx3, ny3, nz3);
 
                                 // Additional redundant quads in different orders for full coverage
                                 // Triangle (v2, v3, v4)

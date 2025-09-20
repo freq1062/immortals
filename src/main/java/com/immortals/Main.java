@@ -3,7 +3,6 @@ package com.immortals;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.server.MinecraftServer;
@@ -11,11 +10,11 @@ import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
 
 import com.immortals.api.TaskScheduler;
+import com.immortals.network.NetworkChannels;
 import com.immortals.Immortal.Immortals;
 import com.immortals.Immortal.Spell;
 import com.immortals.Mortal.Mortals;
 import com.immortals.Mortal.Weapons;
-import com.immortals.network.NetworkChannels;
 import io.github.dennisochulor.tickrate.api.TickRateAPI;
 
 import java.io.IOException;
@@ -50,28 +49,13 @@ public class Main implements ModInitializer {
 			api = TickRateAPI.getInstance();
 		});
 
-		// Server to client
-		PayloadTypeRegistry.playS2C().register(NetworkChannels.RuneS2CPayload.ID, NetworkChannels.RuneS2CPayload.CODEC);
-		PayloadTypeRegistry.playS2C().register(NetworkChannels.SphereS2CPayload.ID,
-				NetworkChannels.SphereS2CPayload.CODEC);
-		PayloadTypeRegistry.playS2C().register(NetworkChannels.ItemS2CPayload.ID,
-				NetworkChannels.ItemS2CPayload.CODEC);
-		PayloadTypeRegistry.playS2C().register(NetworkChannels.SpellHudS2CPayload.ID,
-				NetworkChannels.SpellHudS2CPayload.CODEC);
-		PayloadTypeRegistry.playS2C().register(NetworkChannels.GhostS2CPayload.ID,
-				NetworkChannels.GhostS2CPayload.CODEC);
-		// Client to server
-		PayloadTypeRegistry.playC2S().register(NetworkChannels.SpellC2SPayload.ID,
-				NetworkChannels.SpellC2SPayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(NetworkChannels.FragmentC2SPayload.ID,
-				NetworkChannels.FragmentC2SPayload.CODEC);
-
 		// Register a server tick event to process scheduled tasks
 		ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
 			scheduler.tick(server.getTicks());
 		});
 
 		Identifier glassSoundId = Identifier.of(MOD_ID, "glass");
+		NetworkChannels.register();
 		Registry.register(Registries.SOUND_EVENT, glassSoundId, SoundEvent.of(glassSoundId));
 		ModItems.registerModItems();
 		Immortals.register();
