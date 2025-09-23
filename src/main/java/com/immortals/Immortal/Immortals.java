@@ -46,8 +46,8 @@ import java.util.UUID;
 public class Immortals {
 
     // Fragment related data structures
-    public static final java.util.Map<ServerPlayerEntity, Entity> fragments = new java.util.HashMap<>();
-    public static final java.util.Map<UUID, Integer> fragmentCount = new java.util.HashMap<>();
+    public static final java.util.Map<ServerPlayerEntity, Entity> fragments = new java.util.concurrent.ConcurrentHashMap<>();
+    public static final java.util.Map<UUID, Integer> fragmentCount = new java.util.concurrent.ConcurrentHashMap<>();
     // Link related data structures
     public static final java.util.Map<ServerPlayerEntity, ServerPlayerEntity> parent = new java.util.concurrent.ConcurrentHashMap<>();
     public static final java.util.Map<ServerPlayerEntity, Integer> size = new java.util.concurrent.ConcurrentHashMap<>();
@@ -92,11 +92,17 @@ public class Immortals {
             if (fragmentCount.getOrDefault(user.getUuid(), -1) == -1) {
                 return;
             }
-            if (fragmentCount.getOrDefault(user.getUuid(), -1) >= 3) {
+            int currentCount = fragmentCount.getOrDefault(user.getUuid(), 0);
+            if (currentCount >= 3) {
                 fragmentCount.put(user.getUuid(), -1);
                 SpellRegistry.recordUse(user, SpellRegistry.FRAGMENT);
                 return;
             }
+
+            // Increment the fragment count first
+            currentCount++;
+            fragmentCount.put(user.getUuid(), currentCount);
+
             Vec3d playerPos = user.getPos();
             Vec3d lookVec = user.getRotationVec(1.0F).normalize();
             ServerWorld world = user.getWorld();
@@ -130,9 +136,15 @@ public class Immortals {
                         1, offsetX, offsetY, offsetZ,
                         0.1);
             }
-            fragmentCount.put(user.getUuid(), fragmentCount.getOrDefault(user.getUuid(), 0) + 1);
-            int remainingFragments = 3 - fragmentCount.getOrDefault(user.getUuid(), 0);
-            user.sendMessage(Text.literal(remainingFragments + " fragments remaining!"), true);
+
+            int remainingFragments = 3 - currentCount;
+            if (currentCount == 3) {
+                SpellRegistry.recordUse(user, SpellRegistry.FRAGMENT);
+                fragmentCount.put(user.getUuid(), -1);
+            } else {
+                user.sendMessage(Text.literal(
+                        remainingFragments + " fragment" + (remainingFragments != 1 ? "s" : "") + " remaining!"), true);
+            }
         });
 
         // Passive abilities and spell activation using shift + right click
@@ -154,6 +166,7 @@ public class Immortals {
                 Entity fragment = entry.getValue();
                 if (fragment.isRemoved()) {
                     fragments.entrySet().removeIf(e -> e.getValue().equals(fragment));
+                    continue;
                 }
 
                 // Spawn red particles behind the fragment (trail effect)
@@ -174,37 +187,45 @@ public class Immortals {
             }
 
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                // Make iron golems aggressive to immortal players, ignoring players in
-                // spectator and creative mode
-                if (((ImmortalsData) player).isImmortal() && !player.isSpectator() && !player.isCreative()) {
-                    Box searchBox = player.getBoundingBox().expand(8.0);
-                    player.getWorld().getEntitiesByType(
-                            net.minecraft.entity.EntityType.IRON_GOLEM,
-                            searchBox,
-                            golem -> true).forEach(golem -> {
-                                if (golem instanceof IronGolemEntity ironGolem) {
-                                    ironGolem.setTarget(player);
-                                }
-                            });
+
+                ImmortalsData data = (ImmortalsData) player;
+                if (!data.isImmortal())
+                    continue;
+
+                if (data.hasTimekeeper() != (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1)
+                        && data.hasTimekeeper() == false) {
+                    MutableText message = Text.literal("Unlocked ");
+                    MutableText spellText = Text.literal("Timeslow")
+                            .styled(style -> style.withHoverEvent(
+                                    new HoverEvent.ShowText(
+                                            Text.literal(SpellRegistry.TIMESLOW.getDescription())))
+                                    .withColor(0xFFD700)); // Gold color
+
+                    player.sendMessage(message.append(spellText)
+                            .append(" and gained Haste II! Hover to see details!"));
                 }
+                if (data.hasDragonEgg() != (Utils.inventoryHas(player, Items.DRAGON_EGG) != -1)
+                        && data.hasDragonEgg() == false) {
+                    MutableText message = Text.literal("Unlocked ");
+                    MutableText spellText = Text.literal("Dragon Ascent")
+                            .styled(style -> style.withHoverEvent(
+                                    new HoverEvent.ShowText(
+                                            Text.literal(SpellRegistry.DRAGON_ASCENT.getDescription())))
+                                    .withColor(0x800080)); // Purple color
+
+                    player.sendMessage(message.append(spellText)
+                            .append(" and gained +1 attack damage! Hover to see details!"));
+                }
+                data.setTimekeeper(Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1);
+                data.setDragonEgg(Utils.inventoryHas(player, Items.DRAGON_EGG) != -1);
 
                 // Grant +1 attack damage if player has Dragon Egg and is immortal
                 EntityAttributeInstance attackAttr = player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE);
 
                 double baseAttack = 1.0; // Default base value
-                if (Utils.inventoryHas(player, Items.DRAGON_EGG) != -1 && ((ImmortalsData) player).isImmortal()) {
+                if (data.hasDragonEgg()) {
                     // Only increase if not already increased
                     if (attackAttr != null && attackAttr.getBaseValue() <= baseAttack) {
-                        MutableText message = Text.literal("Unlocked ");
-                        MutableText spellText = Text.literal("Dragon Ascent")
-                                .styled(style -> style.withHoverEvent(
-                                        new HoverEvent.ShowText(
-                                                Text.literal(SpellRegistry.DRAGON_ASCENT.getDescription())))
-                                        .withColor(0x800080)); // Purple color
-
-                        player.sendMessage(
-                                message.append(spellText)
-                                        .append(" and gained +1 attack damage! Hover to see details!"));
                         attackAttr.setBaseValue(baseAttack + 1.0);
                     }
                 } else {
@@ -215,21 +236,11 @@ public class Immortals {
                 }
 
                 // Grant Haste II effect if player has Timekeeper and is immortal
-                if (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1) {
+                if (data.hasTimekeeper()) {
                     if (((ImmortalsData) player).isImmortal()) {
-                        MutableText message = Text.literal("Unlocked ");
-                        MutableText spellText = Text.literal("Timeslow")
-                                .styled(style -> style.withHoverEvent(
-                                        new HoverEvent.ShowText(
-                                                Text.literal(SpellRegistry.TIMESLOW.getDescription())))
-                                        .withColor(0xFFD700)); // Gold color
-
-                        player.sendMessage(message.append(spellText)
-                                .append(" and gained Haste II! Hover to see details!"));
-
                         // Apply Haste II effect for 2 seconds
                         player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                                net.minecraft.entity.effect.StatusEffects.HASTE, 40, 1));
+                                net.minecraft.entity.effect.StatusEffects.HASTE, 60, 1));
                     }
                 }
 
@@ -250,6 +261,8 @@ public class Immortals {
                     }
                     // Automatically use Persist if health < 3 hearts
                     if (player.getHealth() < 6.0f) {
+                        if (SpellRegistry.getSlot(player, SpellRegistry.PERSIST) == -1)
+                            continue;
                         SpellRegistry.tryActivate(player, null, SpellRegistry.getSlot(player, SpellRegistry.PERSIST));
                     }
                 }
@@ -435,7 +448,7 @@ public class Immortals {
                             String playerName = victim.getName().getString();
                             String reason = "\"You have lost all your corruption levels!\"";
                             // Fix command syntax - may need to be adjusted based on your server type
-                            String command = String.format("tempban %s 0 0 24 %s", playerName, reason);
+                            String command = String.format("tempban %s 24h %s", playerName, reason);
                             server.getCommandManager().executeWithPrefix(server.getCommandSource(), command);
                         });
                     }

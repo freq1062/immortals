@@ -32,7 +32,7 @@ public final class SpellHudClient {
 
     // render called from HudElementRegistry
     public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
-        if (!ImmortalsClient.validated)
+        if (System.currentTimeMillis() - ImmortalsClient.lastValidated > 4 * 1000)
             return; // only render if validated by server
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null)

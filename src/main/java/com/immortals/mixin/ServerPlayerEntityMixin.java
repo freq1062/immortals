@@ -37,6 +37,10 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
     @Unique
     private String linked = null;
     @Unique
+    private boolean has_dragon_egg = false;
+    @Unique
+    private boolean has_timekeeper = false;
+    @Unique
     private final Map<UUID, Pair<Integer, Long>> combo_counts = new HashMap<>();
 
     // read on join / load
@@ -48,6 +52,8 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
         abilities_disabled = view.getBoolean("Immortals:AbilitiesDisabled", false);
         on_hit_spell = view.getString("Immortals:OnHitSpell", "");
         linked = view.getString("Immortals:Linked", null);
+        has_dragon_egg = view.getBoolean("Immortals:HasDragonEgg", false);
+        has_timekeeper = view.getBoolean("Immortals:HasTimekeeper", false);
 
         // trusted: typed list of strings (UUID strings)
         view.getOptionalTypedListView("Immortals:Trusted", Codec.STRING).ifPresent(list -> {
@@ -92,6 +98,8 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
         view.putBoolean("Immortals:Ascended", is_immortal);
         view.putBoolean("Immortals:AbilitiesDisabled", abilities_disabled);
         view.putString("Immortals:OnHitSpell", on_hit_spell);
+        view.putBoolean("Immortals:HasDragonEgg", has_dragon_egg);
+        view.putBoolean("Immortals:HasTimekeeper", has_timekeeper);
         if (linked != null)
             view.putString("Immortals:Linked", linked);
 
@@ -228,5 +236,25 @@ public class ServerPlayerEntityMixin implements ImmortalsData {
     @Override
     public void removeTrusted(UUID uuid) {
         immortals_trusted.remove(uuid);
+    }
+
+    @Override
+    public boolean hasDragonEgg() {
+        return has_dragon_egg;
+    }
+
+    @Override
+    public void setDragonEgg(boolean hasEgg) {
+        has_dragon_egg = hasEgg;
+    }
+
+    @Override
+    public boolean hasTimekeeper() {
+        return has_timekeeper;
+    }
+
+    @Override
+    public void setTimekeeper(boolean hasTimekeeper) {
+        has_timekeeper = hasTimekeeper;
     }
 }

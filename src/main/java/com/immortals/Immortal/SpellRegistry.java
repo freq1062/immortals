@@ -1111,6 +1111,7 @@ public enum SpellRegistry {
      * Attempt to activate—returns true on success, false if unbound or on cooldown
      */
     public static boolean tryActivate(ServerPlayerEntity player, ServerPlayerEntity target, int slot) {
+        System.out.println("Attempting to activate spell in slot " + slot);
         ImmortalsData playerData = (ImmortalsData) player;
         // Must have ascended
         if (!playerData.isImmortal()) {

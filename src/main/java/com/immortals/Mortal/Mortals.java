@@ -129,6 +129,7 @@ public class Mortals {
                 // Mortal killed by mortal or natural causes
                 if (attacker instanceof ServerPlayerEntity k
                         && !((ImmortalsData) k).isImmortal()) {
+                    victim.dropItem(new ItemStack(ModItems.HEART, 1), false);
                     // Check if the victim has no hearts left
                     EntityAttributeInstance mhVic = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                     if (mhVic.getBaseValue() <= 2.0) {
@@ -136,7 +137,7 @@ public class Mortals {
                         mhVic.setBaseValue(6.0); // Restart player at 3 hearts
                         String playerName = victim.getName().getString();
                         String reason = "You have run out of hearts!";
-                        String command = String.format("tempban %s 0 0 24 %s", playerName, reason);
+                        String command = String.format("tempban %s 24h %s", playerName, reason);
                         MinecraftServer server = victim.getServer();
                         server.getCommandManager().executeWithPrefix(server.getCommandSource(), command);
                         return;

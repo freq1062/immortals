@@ -36,6 +36,14 @@ public interface ImmortalsData {
 
     void setLinked(UUID uuid);
 
+    boolean hasDragonEgg();
+
+    void setDragonEgg(boolean hasEgg);
+
+    boolean hasTimekeeper();
+
+    void setTimekeeper(boolean hasTimekeeper);
+
     // Combo count on target: [UUID, combo count, last hit time]
     Map<UUID, Pair<Integer, Long>> getComboCounts();
 
