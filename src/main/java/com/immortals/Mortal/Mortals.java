@@ -127,9 +127,8 @@ public class Mortals {
                 ImmortalsData victimData = (ImmortalsData) victim;
 
                 // Mortal killed by mortal or natural causes
-                if (attacker instanceof ServerPlayerEntity k
-                        && !((ImmortalsData) k).isImmortal()) {
-                    victim.dropItem(new ItemStack(ModItems.HEART, 1), false);
+                if (!(attacker instanceof ServerPlayerEntity) || (attacker instanceof ServerPlayerEntity k
+                        && !((ImmortalsData) k).isImmortal())) {
                     // Check if the victim has no hearts left
                     EntityAttributeInstance mhVic = victim.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                     if (mhVic.getBaseValue() <= 2.0) {
