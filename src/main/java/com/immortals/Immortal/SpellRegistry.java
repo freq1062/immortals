@@ -14,6 +14,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.text.Text;
@@ -461,9 +462,7 @@ public enum SpellRegistry {
                                 BlockPos.ofFloored(center.add(maxRadius, maxRadius, maxRadius)))
                                 .filter(pos -> world.getBlockState(pos).isOf(net.minecraft.block.Blocks.COBWEB))
                                 .forEach(pos -> world.breakBlock(pos, false));
-                    }, step * 5); // every
-                                  // 5
-                                  // ticks
+                    }, step * 10);
                 }
             }, maxRadius);
 
@@ -702,10 +701,14 @@ public enum SpellRegistry {
                     net.minecraft.sound.SoundEvents.ENTITY_ENDER_DRAGON_AMBIENT,
                     net.minecraft.sound.SoundCategory.PLAYERS, 0.5F, 1.0F);
 
-            // Target all players and hostile entities within the radius
-            List<LivingEntity> targets = world.getEntitiesByClass(LivingEntity.class,
-                    user.getBoundingBox().expand(radius),
-                    e -> (e instanceof ServerPlayerEntity) || (e instanceof HostileEntity));
+            Box box = user.getBoundingBox().expand(radius);
+
+            List<ServerPlayerEntity> players = world.getEntitiesByClass(ServerPlayerEntity.class, box, e -> true);
+            List<HostileEntity> hostiles = world.getEntitiesByClass(HostileEntity.class, box, e -> true);
+
+            // merge if needed
+            List<LivingEntity> targets = new ArrayList<>(players);
+            targets.addAll(hostiles);
 
             for (LivingEntity t : targets) {
                 // Skip yourself, teammates, trusted
@@ -795,7 +798,7 @@ public enum SpellRegistry {
             Vec3d center = user.getPos();
             double radius = Main.CONFIG.getDouble("timeSlowRadius");
             int duration = Main.CONFIG.getInt("timeSlowDuration");
-            int checkInterval = 2;
+            int checkInterval = 10;
 
             world.playSound(null, user.getX(), user.getY(), user.getZ(),
                     net.minecraft.sound.SoundEvents.BLOCK_BEACON_ACTIVATE, net.minecraft.sound.SoundCategory.PLAYERS,
@@ -832,9 +835,10 @@ public enum SpellRegistry {
                 Main.scheduler.schedule(() -> {
                     // Find all living entities (including players) within the radius, except
                     // yourself
-                    List<Entity> inZone = world.getOtherEntities(null,
-                            user.getBoundingBox().expand(radius).offset(effectCenter.subtract(user.getPos())),
-                            e -> e != user && e.squaredDistanceTo(effectCenter) <= radius * radius);
+                    Box box = user.getBoundingBox().expand(radius);
+
+                    List<LivingEntity> inZone = world.getEntitiesByClass(LivingEntity.class, box,
+                            e -> e != user && e.isAlive());
 
                     // Apply ender pearl cooldown to any players in the zone
                     for (Entity entity : inZone) {
@@ -1111,7 +1115,6 @@ public enum SpellRegistry {
      * Attempt to activate—returns true on success, false if unbound or on cooldown
      */
     public static boolean tryActivate(ServerPlayerEntity player, ServerPlayerEntity target, int slot) {
-        System.out.println("Attempting to activate spell in slot " + slot);
         ImmortalsData playerData = (ImmortalsData) player;
         // Must have ascended
         if (!playerData.isImmortal()) {

@@ -46,9 +46,6 @@ public class Immortals {
     // Fragment related data structures
     public static final java.util.Map<ServerPlayerEntity, Entity> fragments = new java.util.concurrent.ConcurrentHashMap<>();
     public static final java.util.Map<UUID, Integer> fragmentCount = new java.util.concurrent.ConcurrentHashMap<>();
-    // Link related data structures
-    public static final java.util.Map<ServerPlayerEntity, ServerPlayerEntity> parent = new java.util.concurrent.ConcurrentHashMap<>();
-    public static final java.util.Map<ServerPlayerEntity, Integer> size = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static void register() {
         Main.LOGGER.info("Registering Immortals events");
@@ -154,8 +151,6 @@ public class Immortals {
                 server.getPlayerManager().getPlayerList().forEach(player -> onlinePlayers.add(player.getUuid()));
 
                 fragments.entrySet().removeIf(entry -> !onlinePlayers.contains(entry.getKey().getUuid()));
-                parent.keySet().removeIf(player -> !onlinePlayers.contains(player.getUuid()));
-                size.keySet().removeIf(player -> !onlinePlayers.contains(player.getUuid()));
             }
 
             // Fragment spell collision
