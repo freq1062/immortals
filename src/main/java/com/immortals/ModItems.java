@@ -65,8 +65,8 @@ public class ModItems {
                                                 §bTo compete with magical powers, Mortal ingenuity
                                                 discovered how to augment the attributes of various items.
 
-                                                §fHold an unstackable item in your offhand while holding this
-                                                item in your main hand, and right click to augment it. Does not stack.
+                                                §fHold an unstackable item in your mainhand with at least one of this
+                                                item in your main hand, and run /augment to augment it. Does not stack.
                                                 """;
                         }
                         case "phasebreaker" -> {

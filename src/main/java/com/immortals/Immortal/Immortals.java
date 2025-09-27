@@ -11,9 +11,7 @@ import com.immortals.Main;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -27,6 +25,7 @@ import net.minecraft.particle.ItemStackParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -35,9 +34,9 @@ import net.minecraft.text.HoverEvent;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.EntityHitResult;
 
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 
 /*Implements the Immortals' corruption and spell system.*/
@@ -46,6 +45,188 @@ public class Immortals {
     // Fragment related data structures
     public static final java.util.Map<ServerPlayerEntity, Entity> fragments = new java.util.concurrent.ConcurrentHashMap<>();
     public static final java.util.Map<UUID, Integer> fragmentCount = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static void endServerTickImmortalsPlayer(MinecraftServer server, ServerPlayerEntity player) {
+        // Remove fragment if player is dead or has disconnected
+        fragments.entrySet().removeIf(entry -> entry.getKey().equals(player));
+        // Passive effects and mythical weapon indicators
+        ImmortalsData data = (ImmortalsData) player;
+        if (!data.isImmortal())
+            return;
+
+        if (data.hasTimekeeper() != (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1)
+                && data.hasTimekeeper() == false) {
+            MutableText message = Text.literal("Unlocked ");
+            MutableText spellText = Text.literal("Timeslow")
+                    .styled(style -> style.withHoverEvent(
+                            new HoverEvent.ShowText(
+                                    Text.literal(SpellRegistry.TIMESLOW.getDescription())))
+                            .withColor(0xFFD700)); // Gold color
+
+            player.sendMessage(message.append(spellText)
+                    .append(" and gained Haste II! Hover to see details!"));
+        }
+        if (data.hasDragonEgg() != (Utils.inventoryHas(player, Items.DRAGON_EGG) != -1)
+                && data.hasDragonEgg() == false) {
+            MutableText message = Text.literal("Unlocked ");
+            MutableText spellText = Text.literal("Dragon Ascent")
+                    .styled(style -> style.withHoverEvent(
+                            new HoverEvent.ShowText(
+                                    Text.literal(SpellRegistry.DRAGON_ASCENT.getDescription())))
+                            .withColor(0x800080)); // Purple color
+
+            player.sendMessage(message.append(spellText)
+                    .append(" and gained +1 attack damage! Hover to see details!"));
+        }
+        data.setTimekeeper(Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1);
+        data.setDragonEgg(Utils.inventoryHas(player, Items.DRAGON_EGG) != -1);
+
+        // Grant +1 attack damage if player has Dragon Egg and is immortal
+        EntityAttributeInstance attackAttr = player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE);
+
+        double baseAttack = 1.0; // Default base value
+        if (data.hasDragonEgg()) {
+            // Only increase if not already increased
+            if (attackAttr != null && attackAttr.getBaseValue() <= baseAttack) {
+                attackAttr.setBaseValue(baseAttack + 1.0);
+            }
+        } else {
+            // Only decrease if currently increased
+            if (attackAttr != null && attackAttr.getBaseValue() > baseAttack) {
+                attackAttr.setBaseValue(baseAttack);
+            }
+        }
+
+        // Grant Haste II effect if player has Timekeeper and is immortal
+        if (data.hasTimekeeper()) {
+            if (((ImmortalsData) player).isImmortal()) {
+                // Apply Haste II effect for 2 seconds
+                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                        net.minecraft.entity.effect.StatusEffects.HASTE, 60, 1));
+            }
+        }
+
+        if (((ImmortalsData) player).isImmortal()) {
+            java.util.function.Consumer<ItemStack> removeAugmented = stack -> {
+                if (Utils.hasAttribute(stack, "immortals:augmented")) {
+                    Utils.removeModifierById(stack, "immortals:augmented");
+                    player.sendMessage(Text.literal("Augmentations removed from item."), false);
+                }
+            };
+            for (int i = 0; i < player.getInventory().size(); i++) {
+                ItemStack stack = player.getInventory().getStack(i);
+                removeAugmented.accept(stack);
+            }
+            // Apply passive corruption effects
+            if (server.getTicks() % 40 == 0) {
+                Utils.applyCorruptionEffects(player);
+            }
+            // Automatically use Persist if health < 3 hearts
+            if (player.getHealth() < 6.0f) {
+                if (SpellRegistry.getSlot(player, SpellRegistry.PERSIST) == -1)
+                    return;
+                SpellRegistry.tryActivate(player, null, SpellRegistry.getSlot(player, SpellRegistry.PERSIST));
+            }
+        }
+    }
+
+    public static void endServerTickImmortals(MinecraftServer server) {
+        // Fragment spell collision
+        for (var entry : fragments.entrySet()) {
+            ServerPlayerEntity sp = entry.getKey();
+            Entity fragment = entry.getValue();
+            if (fragment.isRemoved()) {
+                fragments.entrySet().removeIf(e -> e.getValue().equals(fragment));
+                continue;
+            }
+
+            // Spawn red particles behind the fragment (trail effect)
+            ServerWorld world = (ServerWorld) fragment.getWorld();
+            world.spawnParticles(ParticleTypes.CRIMSON_SPORE, fragment.getX(), fragment.getY(), fragment.getZ(), 3,
+                    0.05, 0.05, 0.05, 0.01);
+            // Check for entity collisions
+            world.getOtherEntities(fragment, fragment.getBoundingBox().expand(0.1),
+                    entity -> entity != sp).forEach(hitEntity -> {
+                        if (hitEntity instanceof net.minecraft.entity.LivingEntity livingEntity) {
+                            float maxHealth = (float) livingEntity.getMaxHealth();
+                            float damage = maxHealth * ((float) Main.CONFIG.getDouble("fragmentDmg"));
+                            livingEntity.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) sp),
+                                    damage);
+                            fragment.remove(Entity.RemovalReason.DISCARDED);
+                        }
+                    });
+        }
+    }
+
+    public static int attackEntityImmortals(PlayerEntity attacker, World world, Hand hand, Entity victim,
+            EntityHitResult hitResult) {
+        if (!(attacker instanceof ServerPlayerEntity sp)
+                || !(victim instanceof ServerPlayerEntity tp))
+            return 0;
+
+        // Check if the item is on cooldown(ex. locked by lock)
+        if (sp.getItemCooldownManager().isCoolingDown(sp.getMainHandStack())) {
+            return -1;
+        }
+
+        // Check if attacker is an ascended player and it was a full swing
+        if (!(world instanceof ServerWorld) || !((ImmortalsData) sp).isImmortal()
+                || sp.getAttackCooldownProgress(0.5F) < 0.85F)
+            return 0;
+
+        // Check if the target is a player and is actively blocking with a shield
+        if (victim instanceof PlayerEntity targetPlayer && targetPlayer.isBlocking()) {
+            return 0;
+        }
+        ImmortalsData user = (ImmortalsData) attacker;
+
+        // Activate on-hit spell if previously activated
+        String onHitSpell = user.onHitSpell();
+        if (onHitSpell != "") {
+            switch (onHitSpell) {
+                case "frostbite" -> SpellRegistry.FROSTBITE.activate(sp, tp);
+                case "lock" -> SpellRegistry.LOCK.activate(sp, tp);
+                case "link" -> {
+                    if (user.getLinked() != null) {
+                        sp.sendMessage(Text.literal("You are already linked to a player!"), true);
+                        return 0;
+                    } else if (((ImmortalsData) tp).getLinked() != null) {
+                        sp.sendMessage(Text.literal("Target player is already linked to someone!"), true);
+                        return 0;
+                    } else {
+                        SpellRegistry.LINK.activate(sp, tp);
+                    }
+                }
+                default -> {
+                    return 0;
+                }
+            }
+            user.setOnHitSpell("");
+        }
+
+        if (SpellRegistry.getSlot(sp, SpellRegistry.SPLINTER_BLOW) == -1)
+            return 0;
+
+        UUID targetId = tp.getUuid();
+        // Check if it's been more than 3 seconds since the last hit
+        long currentTime = System.currentTimeMillis();
+        long lastTime = user.getLastHitTime(targetId);
+
+        int count = user.getComboCount(targetId);
+        if (currentTime - lastTime > 3000) {
+            // Reset splinter count to 1 if too much time passed
+            user.setComboCount(targetId, 1);
+            user.setOnHitSpell("");
+        } else {
+            // Increment the counter if within time window
+            user.setComboCount(targetId, count + 1);
+        }
+
+        user.resetLastHitTime(targetId);
+        // Success and resetting in .activate()
+        SpellRegistry.tryActivate(sp, tp, SpellRegistry.getSlot(sp, SpellRegistry.SPLINTER_BLOW));
+        return 0;
+    }
 
     public static void register() {
         Main.LOGGER.info("Registering Immortals events");
@@ -140,135 +321,6 @@ public class Immortals {
                 user.sendMessage(Text.literal(
                         remainingFragments + " fragment" + (remainingFragments != 1 ? "s" : "") + " remaining!"), true);
             }
-        });
-
-        // Passive abilities and spell activation using shift + right click
-        ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
-
-            if (server.getTicks() % 20 == 0) {
-                // Ensure fragments, parent, and size are cleared for players who are not online
-                Set<UUID> onlinePlayers = new HashSet<>();
-                server.getPlayerManager().getPlayerList().forEach(player -> onlinePlayers.add(player.getUuid()));
-
-                fragments.entrySet().removeIf(entry -> !onlinePlayers.contains(entry.getKey().getUuid()));
-            }
-
-            // Fragment spell collision
-            for (var entry : fragments.entrySet()) {
-                ServerPlayerEntity sp = entry.getKey();
-                Entity fragment = entry.getValue();
-                if (fragment.isRemoved()) {
-                    fragments.entrySet().removeIf(e -> e.getValue().equals(fragment));
-                    continue;
-                }
-
-                // Spawn red particles behind the fragment (trail effect)
-                ServerWorld world = (ServerWorld) fragment.getWorld();
-                world.spawnParticles(ParticleTypes.CRIMSON_SPORE, fragment.getX(), fragment.getY(), fragment.getZ(), 3,
-                        0.05, 0.05, 0.05, 0.01);
-                // Check for entity collisions
-                world.getOtherEntities(fragment, fragment.getBoundingBox().expand(0.1),
-                        entity -> entity != sp).forEach(hitEntity -> {
-                            if (hitEntity instanceof net.minecraft.entity.LivingEntity livingEntity) {
-                                float maxHealth = (float) livingEntity.getMaxHealth();
-                                float damage = maxHealth * ((float) Main.CONFIG.getDouble("fragmentDmg"));
-                                livingEntity.damage(world, Utils.of(world, Utils.SPELL_DAMAGE_TYPE, (Entity) sp),
-                                        damage);
-                                fragment.remove(Entity.RemovalReason.DISCARDED);
-                            }
-                        });
-            }
-
-            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-
-                ImmortalsData data = (ImmortalsData) player;
-                if (!data.isImmortal())
-                    continue;
-
-                if (data.hasTimekeeper() != (Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1)
-                        && data.hasTimekeeper() == false) {
-                    MutableText message = Text.literal("Unlocked ");
-                    MutableText spellText = Text.literal("Timeslow")
-                            .styled(style -> style.withHoverEvent(
-                                    new HoverEvent.ShowText(
-                                            Text.literal(SpellRegistry.TIMESLOW.getDescription())))
-                                    .withColor(0xFFD700)); // Gold color
-
-                    player.sendMessage(message.append(spellText)
-                            .append(" and gained Haste II! Hover to see details!"));
-                }
-                if (data.hasDragonEgg() != (Utils.inventoryHas(player, Items.DRAGON_EGG) != -1)
-                        && data.hasDragonEgg() == false) {
-                    MutableText message = Text.literal("Unlocked ");
-                    MutableText spellText = Text.literal("Dragon Ascent")
-                            .styled(style -> style.withHoverEvent(
-                                    new HoverEvent.ShowText(
-                                            Text.literal(SpellRegistry.DRAGON_ASCENT.getDescription())))
-                                    .withColor(0x800080)); // Purple color
-
-                    player.sendMessage(message.append(spellText)
-                            .append(" and gained +1 attack damage! Hover to see details!"));
-                }
-                data.setTimekeeper(Utils.inventoryHas(player, ModItems.TIMEKEEPER) != -1);
-                data.setDragonEgg(Utils.inventoryHas(player, Items.DRAGON_EGG) != -1);
-
-                // Grant +1 attack damage if player has Dragon Egg and is immortal
-                EntityAttributeInstance attackAttr = player.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE);
-
-                double baseAttack = 1.0; // Default base value
-                if (data.hasDragonEgg()) {
-                    // Only increase if not already increased
-                    if (attackAttr != null && attackAttr.getBaseValue() <= baseAttack) {
-                        attackAttr.setBaseValue(baseAttack + 1.0);
-                    }
-                } else {
-                    // Only decrease if currently increased
-                    if (attackAttr != null && attackAttr.getBaseValue() > baseAttack) {
-                        attackAttr.setBaseValue(baseAttack);
-                    }
-                }
-
-                // Grant Haste II effect if player has Timekeeper and is immortal
-                if (data.hasTimekeeper()) {
-                    if (((ImmortalsData) player).isImmortal()) {
-                        // Apply Haste II effect for 2 seconds
-                        player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                                net.minecraft.entity.effect.StatusEffects.HASTE, 60, 1));
-                    }
-                }
-
-                if (((ImmortalsData) player).isImmortal()) {
-                    java.util.function.Consumer<ItemStack> removeAugmented = stack -> {
-                        if (Utils.hasAttribute(stack, "immortals:augmented")) {
-                            Utils.removeModifierById(stack, "immortals:augmented");
-                            player.sendMessage(Text.literal("Augmentations removed from item."), false);
-                        }
-                    };
-                    for (int i = 0; i < player.getInventory().size(); i++) {
-                        ItemStack stack = player.getInventory().getStack(i);
-                        removeAugmented.accept(stack);
-                    }
-                    // Apply passive corruption effects
-                    if (server.getTicks() % 40 == 0) {
-                        Utils.applyCorruptionEffects(player);
-                    }
-                    // Automatically use Persist if health < 3 hearts
-                    if (player.getHealth() < 6.0f) {
-                        if (SpellRegistry.getSlot(player, SpellRegistry.PERSIST) == -1)
-                            continue;
-                        SpellRegistry.tryActivate(player, null, SpellRegistry.getSlot(player, SpellRegistry.PERSIST));
-                    }
-                }
-            }
-        });
-
-        // Prevent using items on blocks if the item is on cooldown (ex. Lock spell)
-        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (player instanceof ServerPlayerEntity sp
-                    && sp.getItemCooldownManager().isCoolingDown(sp.getMainHandStack())) {
-                return ActionResult.FAIL;
-            }
-            return ActionResult.PASS;
         });
 
         // Splinter blow and on-hit spell type activations
@@ -431,8 +483,9 @@ public class Immortals {
                 Entity attacker = src.getAttacker();
                 boolean attackerImmortal = attacker instanceof ServerPlayerEntity k
                         && ((ImmortalsData) k).isImmortal();
+                ImmortalsData victimData = (ImmortalsData) ent;
 
-                if (((ImmortalsData) victim).getCorruption() <= -3) {
+                if (victimData.isImmortal() && victimData.getCorruption() <= -3) {
                     // banned ):
                     MinecraftServer server = victim.getServer();
                     if (server != null) {
